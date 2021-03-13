@@ -2,7 +2,7 @@
 rm(list=ls(all=TRUE))
 
 ##Libraries
-
+library("SimDesign")
 
 source("init.R")
 source("sim_functions.R")
