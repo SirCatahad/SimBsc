@@ -31,7 +31,7 @@ simData <- function(n, r.sqrd, coefficients ,parameters)
 # data       - the data frame which should get missing observations
 # mechanism  - the mechanism of missing data, by default MCAR
 # percent    - the proportion of observations that should be set to missing (NA)
-# indexRange - A vector of indices restricting which columns should contain missing values
+# indices    - A vector of indices indicating which columns should contain missing values
 makeMissing <- function(data, mechanism="MCAR", percent, indices)
 {
   df <- data
