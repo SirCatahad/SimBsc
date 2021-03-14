@@ -13,8 +13,11 @@ set.seed(103415)
 
 
 start_time <- Sys.time()
-dat <- simData(n=500, coefficients=coeff_list[[1]], r.sqrd=r.squared[1], parameters=parameters)
-dat <- makeMissing(data=dat, mechanism="MCAR", percent=.25)
+for(i in 1:1000)
+{
+  dat <- simData(n=500, coefficients=coeff_list[[3]], r.sqrd=r.squared[1], parameters=parameters)
+  dat <- makeMissing(data=dat, mechanism="MCAR", percent=.25)
+}
 end_time <- Sys.time()
 
 sum(is.na(dat))
