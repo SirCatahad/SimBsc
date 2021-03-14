@@ -58,20 +58,45 @@ makeMissing <- function(data, mechanism="MCAR", percent, indexRange=-length(data
   #increase the counter.
   if(mechanism=="MCAR")
   {
-    counter <- 0
-    while(counter < nrdelete)
-    {
-      r <- sample(1:nrow(df), 1)
-      c <- sample(1:ncol(df), 1)
-      paste0("Row: ", r, ", Column: ", c)
-      if(!(is.na(df[r,c])))
-      {
-        df[r,c] <- NA
-        counter <- counter + 1
-      }
-    }
-    #replace the columns in the original data set with the ones that now contain missing values
+    #Remember the structure so we can put it back together
+    rows <- nrow(df)
+    cols <- ncol(df)
+    cnames <- colnames(df)
+    structure <- matrix(nrow=rows, ncol=cols)
+
+    #Make a vector out of the data frame so we can use sample()
+    #replace the values
+    some_vector <- unlist(df, use.names = FALSE)
+
+    #creating another vector for the indices is actually faster
+    #than unlisting with names
+    another_vector <- seq(1,length(some_vector),1)
+    tmp <- sample(another_vector, to_delete)
+
+
+
+    #Sample from named vector
+    #tmp <- sample(some_vector, to_delete)
+    some_vector[tmp] <- NA
+
+
+
+
+    #Set the sampled values to NA
+    some_vector[names(tmp)] <- NA
+
+    #Restructure the vector to a data frame
+    df <- relist(some_vector, structure)
+    df <- data.frame(df)
+
+    #Restore original column names
+    colnames(df) <- cnames
+
+    #replace the columns in the original data
+
     df <- replaceColumns(data, df)
+    
+    #return
     df
   }
   else
