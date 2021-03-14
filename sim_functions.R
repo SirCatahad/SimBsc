@@ -28,11 +28,6 @@ simData <- function(n, r.sqrd, coefficients ,parameters)
 }
 
 ##-------------------------------------------------------------------------------------------------------------------##
-# 
-#
-#
-#
-
 # data       - the data frame which should get missing observations
 # mechanism  - the mechanism of missing data, by default MCAR
 # percent    - the proportion of observations that should be set to missing (NA)
@@ -40,11 +35,12 @@ simData <- function(n, r.sqrd, coefficients ,parameters)
 makeMissing <- function(data, mechanism="MCAR", percent, indexRange=-length(data))
 {
   #assign the columns that should contain missing data
-  df <- data[,indexRange]
+  #drop=FALSE prevents the drop in dimension if  the number of columns is reduced to 1
+  df <- data[,indexRange, drop=FALSE]
   #size of the new data.frame
   size <- ncol(df) * nrow(df)
   #the amount of observations that need to be deleted in order to obtain the set percentage.
-  nrdelete <- size*percent
+  to_delete <- size*percent
   
   
   if(mechanism=="MAR")
@@ -53,47 +49,18 @@ makeMissing <- function(data, mechanism="MCAR", percent, indexRange=-length(data
   }
   
   #MCAR missing data mechanism
-  #Loop and sample a random observations until the amount of missing
-  #values is achieved. If the sampled observation has already been set to zero, try again and don't
-  #increase the counter.
   if(mechanism=="MCAR")
   {
-    #Remember the structure so we can put it back together
-    rows <- nrow(df)
-    cols <- ncol(df)
-    cnames <- colnames(df)
-    structure <- matrix(nrow=rows, ncol=cols)
-
-    #Make a vector out of the data frame so we can use sample()
-    #replace the values
-    some_vector <- unlist(df, use.names = FALSE)
-
-    #creating another vector for the indices is actually faster
-    #than unlisting with names
-    another_vector <- seq(1,length(some_vector),1)
-    tmp <- sample(another_vector, to_delete)
-
-
-
-    #Sample from named vector
-    #tmp <- sample(some_vector, to_delete)
-    some_vector[tmp] <- NA
-
-
-
-
-    #Set the sampled values to NA
-    some_vector[names(tmp)] <- NA
-
-    #Restructure the vector to a data frame
-    df <- relist(some_vector, structure)
-    df <- data.frame(df)
-
-    #Restore original column names
-    colnames(df) <- cnames
-
+    #create a matrix containing row and column indices
+    indices <- as.matrix(expand.grid(1:nrow(df), 1:ncol(df)))
+    
+    #randomly select indices until we have enough
+    selected <- indices[sample(nrow(indices), to_delete), ]
+    
+    #set selected observations to missing
+    df[selected] <- NA
+    
     #replace the columns in the original data
-
     df <- replaceColumns(data, df)
     
     #return
@@ -117,6 +84,7 @@ replaceColumns <- function(original, toreplace)
   {
     original[change_columns[i]] <- toreplace[change_columns[i]]
   }
+  
   #And return the merged data frame
   return(original)
 }
