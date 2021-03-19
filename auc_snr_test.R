@@ -34,5 +34,6 @@ for(i in 1:M)
   }
 }
 df <- data.frame(cbind(auc, seq(0.1, 1, .01)))
-df <- df[order(df$V2),]
+colnames(df) <- c("auc", "snr")
+df <- df[order(df$snr),]
 plot(df)
