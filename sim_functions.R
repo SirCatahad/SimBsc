@@ -70,8 +70,9 @@ makeMissing <- function(data,
   else if(mechanism=="MCAR")
   {
     r <- sample(1:nrow(data), nrow(data)*pm)
-    
-    
+    tmp <- rep(FALSE, nrow(data))
+    tmp[r] <- TRUE
+    r <- tmp
     out <- list(r   = r)#,
                 #eta = eta2,
                 #auc = auc,
