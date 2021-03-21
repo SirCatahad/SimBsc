@@ -14,9 +14,6 @@ simData <- function(n, coefficients, covariance, r.sqrd)
   X <- rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma)
 
   #Generate error termn
-  #if r.sqrd = 0, we need to fix this stuff.
-  
-  
   beta <- coefficients[-1]
   if(r.sqrd > 0)
   {
@@ -24,19 +21,18 @@ simData <- function(n, coefficients, covariance, r.sqrd)
     var.residual <- (var.model/r.sqrd) - var.model
     U = rnorm(n, mean = 0, sd = sqrt(var.residual))
     #compute Y
-    Y <- coefficients[1] + X  %*% beta + U 
+    Y <- coefficients[1] + X  %*% beta + U
+    data <- data.frame(X, Y)
   }
   else
   {
-    Y <- rnorm(n=500, mean=0, sd=1)
+    nrpred <- length(coefficients)
+    sigma <- matrix(covariance, nrpred, nrpred)
+    diag(sigma) <- 1.0
+    data <- data.frame(rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma))
+    colnames(data) <- c("X", "Y")
   }
   
-  
-  
-  data <- data.frame(X)
-  
-  #Add to data frame
-  data$Y <- as.vector(Y)
   
   #Return data
   data
@@ -86,7 +82,33 @@ makeMissing <- function(data,
   }
 }
 ##-------------------------------------------------------------------------------------------------------------------##
+## R implementation of Pythons zip() function
 zip <- function(...) 
 {
   mapply(list, ..., SIMPLIFY = FALSE)
+}
+
+##-------------------------------------------------------------------------------------------------------------------##
+## Analyze
+## Extracts relevant information from datasets, namely:
+## - Intercept and slope coefficients
+## - confidence intervals
+## - Standard errors
+analyze <- function(data)
+{
+  #Remove NAs
+  data <- data[complete.cases(data),]
+  #run regression model
+  reg <- lm(Y ~ ., data = data)
+  
+  #build output
+  out <- list(
+    cov           = cov(data),
+    coefficients  = reg$coefficients,
+    residuals     = reg$residuals,
+    regsum        = summary(reg),
+    c_int         = confint(reg)
+  )
+  
+  out
 }
