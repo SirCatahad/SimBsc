@@ -1,6 +1,5 @@
 ## Clean up the workspace
 rm(list=ls(all=TRUE))
-setwd("C:/Users/wufft/Desktop/RL Kram/Uni/Bachelor Thesis/R files/code")
 
 ## Libraries
 library("mice")
