@@ -4,6 +4,7 @@ rm(list=ls(all=TRUE))
 ## Libraries
 library("mice")
 library("ggplot2")
+library("gridExtra")
 
 source("init.R")
 source("simMissingness.R")
@@ -53,11 +54,6 @@ for(i in 1:iter)
     
     
     #Extract relevant information, coefficients, r.squared, etc.
-    
-    nya <- lm(Y ~ X, data)
-    nya <- confint(nya, level=.9)
-    
-    summary(nya)
     
     
     result         <- analyze(data)
@@ -112,12 +108,43 @@ for(i in 1:iter)
       con <- con+1
       
     }
+    
+    ## impute with PDMI
     for(d in dList)
     {
-      ## Impute with PMM
-      for(match in mtype)
+      PDMI <- try(mice(data   = d,
+                       m      = 10,
+                       method = "norm",
+                       printFlag = FALSE
+      ))
+      pdmi_Data <- complete(PDMI, method="long")
+      # fit <- with(PDMI, lm(Y ~ X))
+      # result <- summary(pool(fit), conf.int=TRUE, conf.level = .9)
+      
+      #Store
+      result <- analyze(pdmi_Data)
+      
+      #Store
+      storage[con, ] <- c(result$regsum$coefficients[c(1,2)], 
+                          result$regsum$coefficients[c(3,4)],
+                          result$c_int[,1],
+                          result$c_int[,2],
+                          con)
+      
+      # storage[con, ] <- c(result$estimate, 
+      #                     result$std.error,
+      #                     result$`5 %`,
+      #                     result$`95 %`,
+      #                     con)
+      con <- con+1
+    }
+    
+    ## Impute with PMM
+    for(match in mtype)
+    {
+      for(k in km)
       {
-        for(k in km) #2*4*3*3 + 4
+        for(d in dList)
         {
           #PMM <- try(mice.impute.pmm(y         = data_MCAR[,1],
           #                           ry        = MCAR_out$r,
@@ -131,34 +158,27 @@ for(i in 1:iter)
                           printFlag = FALSE
                           ))
           pmm_Data <- complete(PMM, method="long")
-          fit <- with(PMM, lm(Y ~ X))
-          result <- summary(pool(fit), conf.int = TRUE, conf.level = .9)
+          # fit <- with(PMM, lm(Y ~ X))
+          # result <- summary(pool(fit), conf.int = TRUE, conf.level = .9)
+          # #Store
+          # storage[con, ] <- c(result$estimate, 
+          #                     result$std.error,
+          #                     result$`5 %`,
+          #                     result$`95 %`,
+          #                     con)
+          
           #Store
-          storage[con, ] <- c(result$estimate, 
-                              result$std.error,
-                              result$`5 %`,
-                              result$`95 %`,
+          result <- analyze(pmm_Data)
+          
+          #Store
+          storage[con, ] <- c(result$regsum$coefficients[c(1,2)], 
+                              result$regsum$coefficients[c(3,4)],
+                              result$c_int[,1],
+                              result$c_int[,2],
                               con)
           con <- con+1
         }
       }
-      ## impute with PDMI
-      PDMI <- try(mice(data   = d,
-                      m      = 10,
-                      method = "norm",
-                      printFlag = FALSE
-                      ))
-      pdmi_Data <- complete(PDMI, method="long")
-      fit <- with(PDMI, lm(Y ~ X))
-      result <- summary(pool(fit), conf.int=TRUE, conf.level = .9)
-      
-      #Store
-      storage[con, ] <- c(result$estimate, 
-                          result$std.error,
-                          result$`5 %`,
-                          result$`95 %`,
-                          con)
-      con <- con+1
     }
   }
   #Write out!
@@ -166,36 +186,137 @@ for(i in 1:iter)
   write.table(data.frame(storage), 
         file     = paste0("../data/data_iteration_",i,".csv"))
 }
-
-df <- do.call("rbind", storage_i)
-df <- super_df[order(super_df$Condition),]
-
-#Bias, coverage of confidence intervals, and a measure of (in-)efficiency, 
-#the standard deviation of β over 1,000 replications (henceforth the ‘empirical standard error’), are summarised
-# - Bias
-# - coverage of confidence intervals
-# - measure of (in-)efficiency
-# - standard error
-
-ggplot(super_df)
-
-
-
 end_time <- Sys.time()
 
 end_time - start_time
+
+
+
+df <- do.call("rbind", storage_i)
+df <- df[order(df$Condition),]
+
+# Subtract true parameters from estimates to get Bias
+df[(df["Condition"]>31),"Intercept"] <- df[(df["Condition"]>31),"Intercept"] - parameters$c[[1]][1]
+df[(df["Condition"]>31),"Slope"] <- df[(df["Condition"]>31),"Slope"] - parameters$c[[1]][2]
+
+
+
 #About 15 seconds per  iteration
 #15 minutes for 60 iterations
 #Probably about 4-5 hours for one study
 #So 8-10 hours total runtime
 
+## Summarize
+test <- data.frame(matrix(0,nrow=93,0))
 
-test <- data.frame(aggregate(df, by=df["Condition"], FUN=mean))
+test[c("Condition", "Intercept")] <- aggregate(df["Intercept"], by=df["Condition"], FUN=mean)
+tmp <- data.frame(aggregate(df["Intercept"], by=df["Condition"], FUN=quantile, probs=c(.025, .975)))
+test[c("int.low", "int.high")] <- c(tmp[2]$Intercept[,1], tmp[2]$Intercept[,2])
+
+test[c("Condition", "Slope")] <- aggregate(df["Slope"], by=df["Condition"], FUN=mean)
+tmp <- data.frame(aggregate(df["Slope"], by=df["Condition"], FUN=quantile, probs=c(.025, .975)))
+test[c("slp.low", "slp.high")] <- c(tmp[2]$Slope[,1], tmp[2]$Slope[,2])
+
+## Data method used
+methods <- c("Complete",
+             rep("Incomplete",3),
+             rep("PDMI", 3),
+             rep("PMM - Type I", 12),
+             rep("PMM - Type II", 12))
+
+
+## Identifier for k's used
+kv <- c(rep(" ", 7),
+        rep("k =  1",3),
+        rep("k =  3",3),
+        rep("k =  5",3),
+        rep("k = 10",3),
+        rep("k =  1",3),
+        rep("k =  3",3),
+        rep("k =  5",3),
+        rep("k = 10",3)
+        )
+
+test["k"]      <- kv
+test["method"] <- methods
+
+
+##Split by covariance for better overview
+plot_df <- split(test, rep(1:3, length.out = nrow(test), each = ceiling(nrow(test)/3)))
+
+plotlist <- list()
+
+
+## Add color column (also identifies missing data condition)
+vcol <- c("Complete",
+          rep(c("MCAR","Weak MAR","Strong MAR"),10))
+
+
+plot_df$`1`["color"] <- vcol
+plot_df$`2`["color"] <- vcol
+plot_df$`3`["color"] <- vcol
+  
 
 
 
-ggplot(test, aes(x=-Condition, ymin=conf.intercept.low, y=Intercept, ymax=conf.intercept.high))+
-  geom_pointrange()+
-  #geom_linerange(aes(x=Intercept, ymin=Condition, ymax=Condition, xmin=conf.intercept.low, xmax=conf.intercept.high)) +
-  labs(title="Coefficients plot")+
-  coord_flip()
+
+plot1 <- makePlot(data   = plot_df[[1]], 
+                  xint   = 0, 
+                  title  = "β = 0", 
+                  x      = plot_df[[1]]$Intercept, 
+                  xlow   = plot_df[[1]]$int.low, 
+                  xhigh  = plot_df[[1]]$int.high,
+                  y      = plot_df[[1]]$Condition,
+                  xlimits= c(-1,1))
+
+plot2 <- makePlot(data   = plot_df[[2]], 
+                  xint   = 0, 
+                  title  = "β = 3.33", 
+                  x      = plot_df[[2]]$Intercept, 
+                  xlow   = plot_df[[2]]$int.low, 
+                  xhigh  = plot_df[[2]]$int.high,
+                  y      = plot_df[[2]]$Condition,
+                  xlimits= c(-1.5,1))
+
+plot3 <- makePlot(data   = plot_df[[3]], 
+                  xint   = 0, 
+                  title  = "β = 10", 
+                  x      = plot_df[[3]]$Intercept, 
+                  xlow   = plot_df[[3]]$int.low, 
+                  xhigh  = plot_df[[3]]$int.high,
+                  y      = plot_df[[3]]$Condition,
+                  xlimits= c(-1,1))
+
+
+grid.arrange(plot1, plot2, plot3, ncol=3, nrow=1, top="Bias Intercept")
+
+plot2_1 <- makePlot(data   = plot_df[[1]], 
+                  xint   = 0, 
+                  title  = "β = 0", 
+                  x      = plot_df[[1]]$Slope, 
+                  xlow   = plot_df[[1]]$slp.low, 
+                  xhigh  = plot_df[[1]]$slp.high,
+                  y      = plot_df[[1]]$Condition,
+                  xlimits= c(-.5,.5))
+
+plot2_2 <- makePlot(data   = plot_df[[2]], 
+                  xint   = 0, 
+                  title  = "β = 3.33", 
+                  x      = plot_df[[2]]$Slope, 
+                  xlow   = plot_df[[2]]$slp.low, 
+                  xhigh  = plot_df[[2]]$slp.high,
+                  y      = plot_df[[2]]$Condition,
+                  xlimits= c(-1,1))
+
+plot2_3 <- makePlot(data   = plot_df[[3]], 
+                  xint   = 0, 
+                  title  = "β = 10", 
+                  x      = plot_df[[3]]$Slope, 
+                  xlow   = plot_df[[3]]$slp.low, 
+                  xhigh  = plot_df[[3]]$slp.high,
+                  y      = plot_df[[3]]$Condition,
+                  xlimits= c(-.3,.3))
+
+
+grid.arrange(plot2_1, plot2_2, plot2_3, ncol=3, nrow=1, top="Bias Slope")
+
