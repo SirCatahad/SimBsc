@@ -1,5 +1,6 @@
 ## Clean up the workspace
 rm(list=ls(all=TRUE))
+setwd("C:/Users/wufft/Desktop/RL Kram/Uni/Bachelor Thesis/R files/code")
 
 ## Libraries
 library("mice")
@@ -39,6 +40,8 @@ start_time <- Sys.time()
 
 
 
+## Main Simulation loop -----------------------------------------------------------------------------------------------------
+
 #Study 1
 for(i in 1:iter)
 {
@@ -54,8 +57,6 @@ for(i in 1:iter)
     
     
     #Extract relevant information, coefficients, r.squared, etc.
-    
-    
     result         <- analyze(data)
     storage[con, ] <- c(result$regsum$coefficients[c(1,2)], 
                         result$regsum$coefficients[c(3,4)],
@@ -63,6 +64,23 @@ for(i in 1:iter)
                         result$c_int[,2],
                         con)
     con <- con+1
+    
+    ###############################################
+    ## This is purely for later cosmetics and does not actually do anything
+    storage[con, ] <- c(result$regsum$coefficients[c(1,2)], 
+                        result$regsum$coefficients[c(3,4)],
+                        result$c_int[,1],
+                        result$c_int[,2],
+                        con)
+    con <- con+1
+    storage[con, ] <- c(result$regsum$coefficients[c(1,2)], 
+                        result$regsum$coefficients[c(3,4)],
+                        result$c_int[,1],
+                        result$c_int[,2],
+                        con)
+    con <- con+1
+    #################################################
+    
     
     
     #Poke holes into the dataset
@@ -158,7 +176,7 @@ for(i in 1:iter)
                           printFlag = FALSE
                           ))
           pmm_Data <- complete(PMM, method="long")
-          # fit <- with(PMM, lm(Y ~ X))
+          # fit <- with(PMM, lm(Y ~ X+ I(X^2)))
           # result <- summary(pool(fit), conf.int = TRUE, conf.level = .9)
           # #Store
           # storage[con, ] <- c(result$estimate, 
@@ -195,11 +213,6 @@ end_time - start_time
 df <- do.call("rbind", storage_i)
 df <- df[order(df$Condition),]
 
-# Subtract true parameters from estimates to get Bias
-df[(df["Condition"]>31),"Intercept"] <- df[(df["Condition"]>31),"Intercept"] - parameters$c[[1]][1]
-df[(df["Condition"]>31),"Slope"] <- df[(df["Condition"]>31),"Slope"] - parameters$c[[1]][2]
-
-
 
 #About 15 seconds per  iteration
 #15 minutes for 60 iterations
@@ -207,18 +220,117 @@ df[(df["Condition"]>31),"Slope"] <- df[(df["Condition"]>31),"Slope"] - parameter
 #So 8-10 hours total runtime
 
 ## Summarize
-test <- data.frame(matrix(0,nrow=93,0))
 
-test[c("Condition", "Intercept")] <- aggregate(df["Intercept"], by=df["Condition"], FUN=mean)
-tmp <- data.frame(aggregate(df["Intercept"], by=df["Condition"], FUN=quantile, probs=c(.025, .975)))
-test[c("int.low", "int.high")] <- c(tmp[2]$Intercept[,1], tmp[2]$Intercept[,2])
 
-test[c("Condition", "Slope")] <- aggregate(df["Slope"], by=df["Condition"], FUN=mean)
-tmp <- data.frame(aggregate(df["Slope"], by=df["Condition"], FUN=quantile, probs=c(.025, .975)))
-test[c("slp.low", "slp.high")] <- c(tmp[2]$Slope[,1], tmp[2]$Slope[,2])
+## Bias estimations -----------------------------------------------------------------------------------------------------
 
+
+bias_df <- df
+## First, 
+bias_df[(bias_df["Condition"]>33),"Intercept"] <- bias_df[(bias_df["Condition"]>33),"Intercept"] - parameters$c[[1]][1]
+bias_df[(bias_df["Condition"]>33),"Slope"] <- bias_df[(bias_df["Condition"]>33),"Slope"] - parameters$c[[1]][2]
+
+test <- data.frame(matrix(0,nrow=99,0))
+
+#Predicted value over all iterations for mean value of the intercept
+test[c("Condition", "Intercept")] <- aggregate(bias_df["Intercept"], by=bias_df["Condition"], FUN=mean)
+
+#aggregate standard error: SD(\beta_hat)
+test[c("Condition" , "Intercept SE")] <- aggregate(bias_df["Intercept"], by=bias_df["Condition"], FUN=sd)
+
+##Calculate confidence intervals
+## Confidence interval for \beta_i:
+## CI_Beta_i_.95 = [\beta_hat_i - 1.96 x SE(\beta_hat_i), \beta_hat_i + 1.96 x SE(\beta_hat_i)]
+test["int.low"] <- sapply(test["Intercept"], FUN= (function(x,y) x - 1.96*y), test["Intercept SE"])
+test["int.high"] <- sapply(test["Intercept"], FUN= (function(x,y) x + 1.96*y), test["Intercept SE"])
+
+
+#Predicted value over all iterations for mean value of the slope
+test[c("Condition", "Slope")] <- aggregate(bias_df["Slope"], by=bias_df["Condition"], FUN=mean)
+
+#aggregate standard error: SD(\beta_hat)
+test[c("Condition" , "Slope SE")] <- aggregate(bias_df["Slope"], by=bias_df["Condition"], FUN=sd)
+
+#Calculate Monte Carlo confidence intervals
+test["slp.low"] <- sapply(test["Slope"], FUN= (function(x,y) x - 1.96*y), test["Slope SE"])
+test["slp.high"] <- sapply(test["Slope"], FUN= (function(x,y) x + 1.96*y), test["Slope SE"])
+
+
+
+
+## Coverage of confidence Intervals-----------------------------------------------------------------------------------------------------
+## Coverage of confidence intervals: How often does the true population parameter lie in the
+## estimated 95% confidence interval?
+
+##New column that tells us whether the true population parameter lies in the confidence interval for each
+##Iteration in each condition
+df["CI_int_cov"] <- NA
+
+##If the true parameter lies in the confidence interval
+df[(df["Condition"]>33), "CI_int_cov"] <- mapply(FUN=(function(x,y) 
+                              ifelse((parameters$c[[1]][1] >= x && parameters$c[[1]][1] <= y), TRUE, FALSE)),
+                           y=df[(df["Condition"]>33), "conf.intercept.high"],
+                           x=df[(df["Condition"]>33), "conf.intercept.low"])
+
+##The true parameter for the \beta = 0 is equal to zero
+df[(df["Condition"]<=33), "CI_int_cov"] <- mapply(FUN=(function(x,y) 
+  ifelse((0 >= x && 0 <= y), TRUE, FALSE)),
+  y=df[(df["Condition"]<=33), "conf.intercept.high"],
+  x=df[(df["Condition"]<=33), "conf.intercept.low"])
+
+df["CI_slp_cov"] <- NA
+
+##If the true parameter lies in the confidence interval
+df[(df["Condition"]>33), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
+  ifelse((parameters$c[[1]][2] >= x && parameters$c[[1]][2] <= y), TRUE, FALSE)),
+  y=df[(df["Condition"]>33), "conf.slope.high"],
+  x=df[(df["Condition"]>33), "conf.slope.low"])
+
+##The true parameter for the \beta = 0 is equal to zero
+df[(df["Condition"]<=33), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
+  ifelse((0 >= x && 0 <= y), TRUE, FALSE)),
+  y=df[(df["Condition"]<=33), "conf.slope.high"],
+  x=df[(df["Condition"]<=33), "conf.slope.low"])
+
+
+##Create new data.frame
+CI_df <- data.frame(matrix(0,nrow=99,0))
+
+##Percentage of CIs that contain the true population parameter
+CI_df[c("Condition", "CI_int_cov")] <- aggregate(df$CI_int_cov, by=df["Condition"], FUN= function(x) (sum(x)/iter)*100)
+CI_df[c("Condition", "CI_slp_cov")] <- aggregate(df$CI_slp_cov, by=df["Condition"], FUN= function(x) (sum(x)/iter)*100)
+
+## Compute Monte Carlo CIs
+CI_df["CIcov.int.low"] <- as.vector(sapply(CI_df["CI_int_cov"], FUN= (function(x) x - 1.96*x/parameters$n)))
+CI_df["CIcov.int.high"] <- as.vector(sapply(CI_df["CI_int_cov"], FUN= (function(x) x + 1.96*x/parameters$n)))
+
+## Compute Monte Carlo CIs
+CI_df["CIcov.slp.low"] <- as.vector(sapply(CI_df["CI_slp_cov"], FUN= (function(x) x - 1.96*x/parameters$n)))
+CI_df["CIcov.slp.high"] <- as.vector(sapply(CI_df["CI_slp_cov"], FUN= (function(x) x + 1.96*x/parameters$n)))
+
+
+## Empirical standard Error-----------------------------------------------------------------------------------------------------
+## The standard deviation of β over 1,000 replications (henceforth the ‘empirical standard error’)
+
+## Empirical SE is calculated as: sqrt(1/(nsim-1) * sum_i=1_nsim ( Theta_hat_i - Theta_mean)^2)
+
+SE_df <- data.frame(matrix(0,nrow=99,0))
+
+df["Slope Mean"] <- ave(x=unlist(df["Slope"]), df["Condition"])
+
+
+df["Empirical SE Slope"] <- mapply(FUN= function(th, tm) sqrt(sum((th - tm)^2)/(iter-1)), 
+                                      df$Slope, df$`Slope Mean`)
+
+
+sqrt((1/(iter-1)) * sum((unlist(df$Slope) - df$`Slope Mean`)^2))
+
+SE_df <- aggregate(df$Slope, by=df["Condition"], FUN= function(th, tm) sqrt((1/(iter-1)) * sum((th - tm)^2)), df$`Slope Mean`)
+
+
+## Data prep-----------------------------------------------------------------------------------------------------
 ## Data method used
-methods <- c("Complete",
+methods <- c(rep("Complete",3),
              rep("Incomplete",3),
              rep("PDMI", 3),
              rep("PMM - Type I", 12),
@@ -226,7 +338,7 @@ methods <- c("Complete",
 
 
 ## Identifier for k's used
-kv <- c(rep(" ", 7),
+kv <- c(rep(" ", 9),
         rep("k =  1",3),
         rep("k =  3",3),
         rep("k =  5",3),
@@ -235,31 +347,33 @@ kv <- c(rep(" ", 7),
         rep("k =  3",3),
         rep("k =  5",3),
         rep("k = 10",3)
-        )
+)
 
 test["k"]      <- kv
+test$k <- factor(test$k)
+
 test["method"] <- methods
+
+test <- data.frame(test)
+
+
+vcol <- c(rep("Complete",3),
+          rep(c("MCAR","Weak MAR","Strong MAR"),10))
+
+test["color"] <- vcol
+
+
+combined_df <- merge(test, CI_df, by="Condition")
 
 
 ##Split by covariance for better overview
-plot_df <- split(test, rep(1:3, length.out = nrow(test), each = ceiling(nrow(test)/3)))
+plot_df <- split(combined_df, rep(1:3, length.out = nrow(test), each = ceiling(nrow(test)/3)))
 
 plotlist <- list()
 
 
-## Add color column (also identifies missing data condition)
-vcol <- c("Complete",
-          rep(c("MCAR","Weak MAR","Strong MAR"),10))
-
-
-plot_df$`1`["color"] <- vcol
-plot_df$`2`["color"] <- vcol
-plot_df$`3`["color"] <- vcol
-  
-
-
-
-
+## Plots, drawings and everything neat -----------------------------------------------------------------------------------------------------
+## Bias Intercept Plotgroup
 plot1 <- makePlot(data   = plot_df[[1]], 
                   xint   = 0, 
                   title  = "β = 0", 
@@ -290,33 +404,117 @@ plot3 <- makePlot(data   = plot_df[[3]],
 
 grid.arrange(plot1, plot2, plot3, ncol=3, nrow=1, top="Bias Intercept")
 
+
+##Bias Slope plot group
 plot2_1 <- makePlot(data   = plot_df[[1]], 
-                  xint   = 0, 
-                  title  = "β = 0", 
-                  x      = plot_df[[1]]$Slope, 
-                  xlow   = plot_df[[1]]$slp.low, 
-                  xhigh  = plot_df[[1]]$slp.high,
-                  y      = plot_df[[1]]$Condition,
-                  xlimits= c(-.5,.5))
+                    xint   = 0, 
+                    title  = "β = 0", 
+                    x      = plot_df[[1]]$Slope, 
+                    xlow   = plot_df[[1]]$slp.low, 
+                    xhigh  = plot_df[[1]]$slp.high,
+                    y      = plot_df[[1]]$Condition,
+                    xlimits= c(-1,1))
 
 plot2_2 <- makePlot(data   = plot_df[[2]], 
-                  xint   = 0, 
-                  title  = "β = 3.33", 
-                  x      = plot_df[[2]]$Slope, 
-                  xlow   = plot_df[[2]]$slp.low, 
-                  xhigh  = plot_df[[2]]$slp.high,
-                  y      = plot_df[[2]]$Condition,
-                  xlimits= c(-1,1))
+                    xint   = 0, 
+                    title  = "β = 3.33", 
+                    x      = plot_df[[2]]$Slope, 
+                    xlow   = plot_df[[2]]$slp.low, 
+                    xhigh  = plot_df[[2]]$slp.high,
+                    y      = plot_df[[2]]$Condition,
+                    xlimits= c(-1.5,1.5))
 
 plot2_3 <- makePlot(data   = plot_df[[3]], 
-                  xint   = 0, 
-                  title  = "β = 10", 
-                  x      = plot_df[[3]]$Slope, 
-                  xlow   = plot_df[[3]]$slp.low, 
-                  xhigh  = plot_df[[3]]$slp.high,
-                  y      = plot_df[[3]]$Condition,
-                  xlimits= c(-.3,.3))
+                    xint   = 0, 
+                    title  = "β = 10", 
+                    x      = plot_df[[3]]$Slope, 
+                    xlow   = plot_df[[3]]$slp.low, 
+                    xhigh  = plot_df[[3]]$slp.high,
+                    y      = plot_df[[3]]$Condition,
+                    xlimits= c(-1,1))
 
 
 grid.arrange(plot2_1, plot2_2, plot2_3, ncol=3, nrow=1, top="Bias Slope")
+
+
+## Confidence Interval coverage plot group
+plot3_1 <- makePlot(data   = plot_df[[1]], 
+                    xint   = 0, 
+                    title  = "β = 0", 
+                    x      = plot_df[[1]]$CI_int_cov, 
+                    xlow   = plot_df[[1]]$CIcov.int.low, 
+                    xhigh  = plot_df[[1]]$CIcov.int.high,
+                    y      = plot_df[[1]]$Condition,
+                    xlimits= c(50,105))
+
+plot3_2 <- makePlot(data   = plot_df[[2]], 
+                    xint   = 0, 
+                    title  = "β = 3.33", 
+                    x      = plot_df[[2]]$CI_int_cov, 
+                    xlow   = plot_df[[2]]$CIcov.int.low, 
+                    xhigh  = plot_df[[2]]$CIcov.int.high,
+                    y      = plot_df[[2]]$Condition,
+                    xlimits= c(50,105))
+
+plot3_3 <- makePlot(data   = plot_df[[3]], 
+                    xint   = 0, 
+                    title  = "β = 10", 
+                    x      = plot_df[[3]]$CI_int_cov, 
+                    xlow   = plot_df[[3]]$CIcov.int.low, 
+                    xhigh  = plot_df[[3]]$CIcov.int.high,
+                    y      = plot_df[[3]]$Condition,
+                    xlimits= c(50,105))
+
+
+grid.arrange(plot3_1, plot3_2, plot3_3, ncol=3, nrow=1, top="CI Coverage Intercept")
+
+## Confidence Interval coverage plot group
+plot4_1 <- makePlot(data   = plot_df[[1]], 
+                    xint   = 0, 
+                    title  = "β = 0", 
+                    x      = plot_df[[1]]$CI_slp_cov, 
+                    xlow   = plot_df[[1]]$CIcov.slp.low, 
+                    xhigh  = plot_df[[1]]$CIcov.slp.high,
+                    y      = plot_df[[1]]$Condition,
+                    xlimits= c(50,105))
+
+plot4_2 <- makePlot(data   = plot_df[[2]], 
+                    xint   = 0, 
+                    title  = "β = 3.33", 
+                    x      = plot_df[[2]]$CI_slp_cov, 
+                    xlow   = plot_df[[2]]$CIcov.slp.low, 
+                    xhigh  = plot_df[[2]]$CIcov.slp.high,
+                    y      = plot_df[[2]]$Condition,
+                    xlimits= c(50,105))
+
+plot4_3 <- makePlot(data   = plot_df[[3]], 
+                    xint   = 0, 
+                    title  = "β = 10", 
+                    x      = plot_df[[3]]$CI_slp_cov, 
+                    xlow   = plot_df[[3]]$CIcov.slp.low, 
+                    xhigh  = plot_df[[3]]$CIcov.slp.high,
+                    y      = plot_df[[3]]$Condition,
+                    xlimits= c(50,105))
+
+
+grid.arrange(plot3_1, plot3_2, plot3_3, ncol=3, nrow=1, top="CI Coverage Intercept")
+
+## Empirical standard error plot group
+
+
+
+grid.arrange(plot3_1, plot3_2, plot3_3, ncol=3, nrow=1, top="CI Coverage Intercept")
+
+
+
+
+## TO - DO List -----------------------------------------------------------------------------------------------------
+
+
+## TO - DO
+## Find out how exactly MCCIs work                            (  -  )
+## Empirical Standard Errors                                  (https://cran.r-project.org/web/packages/rsimsum/vignettes/A-introduction.html)
+## cbind all data frames, plot stuff                          (almost, as soon as MCCIs are done)
+## Figure out how to properly space in ggplot                 (done)
+## fix xlimits                                                (as soon as MCCIs are done)
 
