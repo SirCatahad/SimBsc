@@ -2,7 +2,7 @@
 library("SimDesign")
 
 # Functions
-##-------------------------------------------------------------------------------------------------------------------##
+## simData ------------------------------------------------------------------------------------------------------
 simData <- function(n, coefficients, covariance, r.sqrd)
 {
   #Construct covariance matrix
@@ -23,22 +23,20 @@ simData <- function(n, coefficients, covariance, r.sqrd)
     #compute Y
     Y <- coefficients[1] + X  %*% beta + U
     data <- data.frame(X, Y)
-  }
-  else
-  {
+  } else {
     nrpred <- length(coefficients)
     sigma <- matrix(covariance, nrpred, nrpred)
     diag(sigma) <- 1.0
     data <- data.frame(rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma))
     colnames(data) <- c("X", "Y")
   }
-  
-  
+  cov(data)
+  cov(X)
   #Return data
   data
 }
 
-##-------------------------------------------------------------------------------------------------------------------##
+## sim Data for quadratic function-------------------------------------------------------------------------------
 simData2 <- function(n, coefficients, covariance, r.sqrd)
 {
   #Construct covariance matrix
@@ -75,7 +73,7 @@ simData2 <- function(n, coefficients, covariance, r.sqrd)
   data
 }
 
-##-------------------------------------------------------------------------------------------------------------------##
+## make Missing -----------------------------------------------------------------------------------------------------
 # data       - the data frame which should get missing observations
 # mechanism  - the mechanism of missing data, by default MCAR
 # percent    - the proportion of observations that should be set to missing (NA)
@@ -118,14 +116,14 @@ makeMissing <- function(data,
     stop("Undefined or unsupported missing data mechanism.")
   }
 }
-##-------------------------------------------------------------------------------------------------------------------##
+## zip function -------------------------------------------------------------------------------------------------------------------
 ## R implementation of Pythons zip() function
 zip <- function(...) 
 {
   mapply(list, ..., SIMPLIFY = FALSE)
 }
 
-##-------------------------------------------------------------------------------------------------------------------##
+## Analyze (probably unnecessary)------------------------------------------------------------------------------------------------
 ## Analyze
 ## Extracts relevant information from datasets, namely:
 ## - Intercept and slope coefficients
@@ -159,10 +157,10 @@ makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
     #  coord_flip()+
     theme(plot.title = element_text(hjust = 0.5),
           strip.text.y.left = element_text(angle = 0),
-          panel.spacing.y=unit(0,"lines"),
+          panel.spacing.y=unit(.5,"lines"),
           # Remove background
           panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-          panel.background = element_blank(), axis.line = element_line(colour = "black"),
+          #panel.background = element_blank(), axis.line = element_line(colour = "black"),
           #Remove y ticks and labels
           axis.title.y=element_blank(),
           axis.text.y=element_blank(),
@@ -176,7 +174,8 @@ makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
     scale_color_manual(values=c("black","red","green","blue")) +
     scale_x_continuous(limits=xlimits)+
     facet_grid(rows=vars(method,k),
-               scales="fixed",
+               scales="free",
+               space="free_y",
                drop=TRUE,
                switch="y",
                labeller = function (labels) {
