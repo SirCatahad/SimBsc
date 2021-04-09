@@ -14,7 +14,7 @@ simData <- function(n, coefficients, covariance, r.sqrd)
   X <- rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma)
 
   #Generate error termn
-  beta <- coefficients[-1]
+  beta <- covariance
   if(r.sqrd > 0)
   {
     var.model <- t(beta) %*% cov(X) %*% beta
@@ -48,14 +48,14 @@ simData2 <- function(n, coefficients, covariance, r.sqrd)
   X <- rmvnorm(n = n, mean = rep(1, nrpred), sigma = sigma)
   
   #Generate error termn
-  beta <- coefficients[-1]
+  beta <- covariance
   if(r.sqrd > 0)
   {
     var.model <- t(beta) %*% cov(X) %*% beta
     var.residual <- (var.model/r.sqrd) - var.model
     U = rnorm(n, mean = 0, sd = sqrt(var.residual))
     #compute Y
-    Y <- coefficients[1] + X*X  %*% beta + U
+    Y <- (X * X)  %*% beta + U
     data <- data.frame(X, Y)
   }
   else
