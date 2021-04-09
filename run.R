@@ -275,14 +275,15 @@ df[(df["Condition"]<=33), "CI_slp_cov"] <- mapply(FUN=(function(x,y)
 
 
 ##Percentage of CIs that contain the true population parameter
-complete_df[c("Condition", "CI_slp_cov")] <- aggregate(df$CI_slp_cov, by=df["Condition"], FUN= function(x) (sum(x)/iter))
+complete_df[c("Condition", "CI_slp_cov")] <- aggregate(df$CI_slp_cov, by=df["Condition"], FUN= function(x) (sum(x)))
+complete_df["CI_slp_cov"] <- complete_df["CI_slp_cov"]/iter
+
 
 complete_df["CI_slp_cov"] <- complete_df["CI_slp_cov"]*100
 
 
 ## SE of the slope CI coverage
-complete_df[c("Condition", "CI.slp.se")] <- aggregate(df$CI_slp_cov, by=df["Condition"], FUN=function(x) sqrt((x*(1-x))/iter))
-
+complete_df[c("Condition", "CI.slp.se")] <- as.vector(sapply(complete_df$CI_slp_cov, FUN=function(x) sqrt((x*(100-x))/iter)))
 
 ## Compute Monte Carlo CIs
 complete_df["CIcov.slp.low"] <- as.vector(sapply(complete_df["CI_slp_cov"], FUN= (function(x,y) x - 1.96*y), complete_df$CI.slp.se ))
@@ -294,6 +295,13 @@ complete_df["CIcov.slp.high"] <- as.vector(sapply(complete_df["CI_slp_cov"], FUN
 
 ## Empirical SE is calculated as: sqrt(1/(nsim-1) * sum_i=1_nsim ( Theta_hat_i - Theta_mean)^2)
 df["Slope Mean"] <- ave(x=unlist(df["Slope"]), df["Condition"])
+
+
+df["Empirical SE Slope"] <- mapply(FUN= function(th, tm) sqrt(sum((th - tm)^2)/(iter-1)), 
+                                   df$Slope, 
+                                   df$`Slope Mean`)
+
+
 
 df["tmp"] <- mapply(FUN=function(th, tm) (th-tm)^2,
                     df$Slope,
