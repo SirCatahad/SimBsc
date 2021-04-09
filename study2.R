@@ -1,6 +1,5 @@
 ## Clean up the workspace
 rm(list=ls(all=TRUE))
-setwd("C:/Users/wufft/Desktop/RL Kram/Uni/Bachelor Thesis/R files/code")
 
 ## Libraries
 library("mice")
@@ -268,7 +267,9 @@ df[(df["Condition"]<=33), "CI_slp_cov"] <- mapply(FUN=(function(x,y)
 
 
 ##Percentage of CIs that contain the true population parameter
-complete_df[c("Condition", "CI_slp_cov")] <- aggregate(df$CI_slp_cov, by=df["Condition"], FUN= function(x) (sum(x)/iter))
+complete_df[c("Condition", "CI_slp_cov")] <- aggregate(df$CI_slp_cov, by=df["Condition"], FUN= function(x) (sum(x)))
+complete_df["CI_slp_cov"] <- complete_df["CI_slp_cov"]/iter
+
 
 complete_df["CI_slp_cov"] <- complete_df["CI_slp_cov"]*100
 
@@ -288,9 +289,9 @@ complete_df["CIcov.slp.high"] <- as.vector(sapply(complete_df["CI_slp_cov"], FUN
 df["Slope Mean"] <- ave(x=unlist(df["Slope"]), df["Condition"])
 
 
-# df["Empirical SE Slope"] <- mapply(FUN= function(th, tm) sqrt(sum((th - tm)^2)/(iter-1)), 
-#                                    df$Slope, 
-#                                    df$`Slope Mean`)
+df["Empirical SE Slope"] <- mapply(FUN= function(th, tm) sqrt(sum((th - tm)^2)/(iter-1)), 
+                                    df$Slope, 
+                                    df$`Slope Mean`)
 
 
 
@@ -435,7 +436,7 @@ plot3_3 <- makePlot(data   = plot_df[[3]],
                     xlow   = plot_df[[3]]$SE.slp.low, 
                     xhigh  = plot_df[[3]]$SE.slp.high,
                     y      = plot_df[[3]]$Condition,
-                    xlimits= c(0,2))
+                    xlimits= c(0,1))
 
 
 grid.arrange(plot3_1, plot3_2, plot3_3, ncol=3, nrow=1, top="Empirical Standard Error")
