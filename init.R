@@ -13,7 +13,7 @@ km          <- c(1, 3 ,5, 10)       # k for each match type
 method      <- c("MI", "PMM")
 
 
-iter <- 4                           # iterations
+iter <- 50                           # iterations
 
 #Fixed
 parameters$n    <- 500              #sample size
