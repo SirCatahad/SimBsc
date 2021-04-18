@@ -1,10 +1,15 @@
 ##Libraries
-library("SimDesign")
+library("SimDesign") ### KML: Are you actually using this library?
 
 # Functions
 ## simData ------------------------------------------------------------------------------------------------------
 simData <- function(n, coefficients, covariance, r.sqrd)
 {
+
+### KML: You only have 1 X variable. You can generate X as standard normal and
+### get rid of all the marix operations. You don't need to worry about defining
+### 'nrpred' or 'covariance'.
+    
   #Construct covariance matrix
   nrpred <- length(coefficients) - 1
   sigma <- matrix(covariance, nrpred, nrpred)
@@ -14,7 +19,8 @@ simData <- function(n, coefficients, covariance, r.sqrd)
   X <- rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma)
 
   #Generate error termn
-  beta <- covariance
+  beta <- covariance ### KML: Why is beta = covariance? Where are you using
+                     ### 'coefficients[2]'?
   if(r.sqrd > 0)
   {
     var.model <- t(beta) %*% cov(X) %*% beta
@@ -24,13 +30,16 @@ simData <- function(n, coefficients, covariance, r.sqrd)
     Y <- coefficients[1] + X  %*% beta + U
     data <- data.frame(X, Y)
   } else {
+### KML: You can just simulate two independent normal variates here. The mean of
+### Y is just the intercept and the variance is the residual variance.
+      
     nrpred <- length(coefficients)
     sigma <- matrix(covariance, nrpred, nrpred)
     diag(sigma) <- 1.0
     data <- data.frame(rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma))
     colnames(data) <- c("X", "Y")
   }
-  cov(data)
+  cov(data) ### KML: Don't put useless calculations in your functions.
   cov(X)
   #Return data
   data
@@ -39,6 +48,8 @@ simData <- function(n, coefficients, covariance, r.sqrd)
 ## sim Data for quadratic function-------------------------------------------------------------------------------
 simData2 <- function(n, coefficients, covariance, r.sqrd)
 {
+    ### KML: Same issue as above w.r.t. the single X variable. 
+    
   #Construct covariance matrix
   nrpred <- length(coefficients) - 1
   sigma <- matrix(covariance, nrpred, nrpred)
@@ -51,10 +62,14 @@ simData2 <- function(n, coefficients, covariance, r.sqrd)
   beta <- covariance
   if(r.sqrd > 0)
   {
+### KML: You need to combine X and X^2 into a single predictor matrix before
+### computing the residual variance
     var.model <- t(beta) %*% cov(X) %*% beta
     var.residual <- (var.model/r.sqrd) - var.model
     U = rnorm(n, mean = 0, sd = sqrt(var.residual))
-    #compute Y
+                                        #compute Y
+
+### KML: Where's your linear term?
     Y <- (X * X)  %*% beta + U
     data <- data.frame(X, Y)
   }
@@ -78,6 +93,15 @@ simData2 <- function(n, coefficients, covariance, r.sqrd)
 # mechanism  - the mechanism of missing data, by default MCAR
 # percent    - the proportion of observations that should be set to missing (NA)
 # indices    - A vector of indices indicating which columns should contain missing values
+
+### KML: This function doesn't make much sense. You're returning the response
+### vector, which is the same thing returned by the simLinearMissingness()
+### function. So, why what simLinearMissingness() in another function with the
+### same return value? You need a function to generate MCAR missingness, but it
+### doesn't have to also generate MAR missingness. If you create a combined
+### function, it should take some complete data and return incomplete data.
+
+
 makeMissing <- function(data, 
                         mechanism="MCAR", 
                         pm, 
@@ -129,6 +153,13 @@ zip <- function(...)
 ## - Intercept and slope coefficients
 ## - confidence intervals
 ## - Standard errors
+
+### KML: This function isn't really fit for purpose, for two reasons:
+###      1. It won't work for MI data. You can use the with.mids() function to
+###         fit the models to the imputed data.
+###      2. You're saving a bunch of stuff that you don't need. You only need
+###         the coefficients and CIs.
+
 analyze <- function(data)
 {
   #Remove NAs
@@ -147,6 +178,10 @@ analyze <- function(data)
   
   out
 }
+
+### KML: I haven't checked any of the analysis/visualization code yet. You need
+### to get the simulation running correctly before worrying about visualizing
+### the results.
 
 makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
 {

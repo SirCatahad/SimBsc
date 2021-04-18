@@ -1,6 +1,8 @@
 ## Clean up the workspace
 rm(list=ls(all=TRUE))
 
+                                        #install.packages("SimDesign", repos = "http://cloud.r-project.org")
+
 ## Libraries
 library("mice")
 library("ggplot2")
@@ -42,11 +44,16 @@ start_time <- Sys.time()
 ## Main Simulation loop -----------------------------------------------------------------------------------------------------
 
 #Study 1
-for(i in 1:iter)
+for(i in 1:iter) ### KML: Don't loop through iterations. You need a main-style
+                 ### function that does all of the computation for a single
+                 ### iteration. We can't parallelize with looped iterations.
 {
   con <- 1
   #Create a data table for each iteration containing all relevant information
-  for(cr in zip(covariances, r.squared))
+  for(cr in zip(covariances, r.squared)) ### KML: What are you doing with this
+                                         ### zip() function? Why aren't you
+                                         ### fully crossing the 'covariances'
+                                         ### and 'r.squared' factors?
   {
     #Generate data with given parameters
     data <- try(with(parameters, simData(n    = n,
@@ -62,11 +69,20 @@ for(i in 1:iter)
                         result$c_int[,1],
                         result$c_int[,2],
                         con)
-    con <- con+1
+    con <- con+1 ### KML: This method of tracking conditions is way too
+                 ### fragile. Also, you probably shouldn't have so many
+                 ### hard-coded updates to your results container. Write a
+                 ### function that does all of the computations for one design
+                 ### cell and call that function inside of the main-style
+                 ### function mentioned above.
     
     ###############################################
-    ## This is purely for later cosmetics and does not actually do anything
-    storage[con, ] <- c(result$regsum$coefficients[c(1,2)], 
+
+### KML: What's going on here? You've just duplicated the previous results but
+### associated them with two new conditions.
+      
+      ## This is purely for later cosmetics and does not actually do anything
+      storage[con, ] <- c(result$regsum$coefficients[c(1,2)], 
                         result$regsum$coefficients[c(3,4)],
                         result$c_int[,1],
                         result$c_int[,2],
@@ -80,7 +96,9 @@ for(i in 1:iter)
     con <- con+1
     #################################################
     
-    
+    ### KML: Don't generate all your data first and then analyze. Generate and
+    ### analyze on-the-fly. You only want to keep one working dataset in memory
+    ### at a time.
     
     #Poke holes into the dataset
     MCAR_out <- try(with(parameters, makeMissing(data      = data,
@@ -102,7 +120,8 @@ for(i in 1:iter)
     con <- con+1
     
     dList <- list(data_MCAR)
-    for(s in snr)
+      s <- snr[1]
+      for(s in snr)
     {
       MAR_out <- try(with(parameters, makeMissing(data      = data,
                                                   mechanism = "MAR",
@@ -169,8 +188,13 @@ for(i in 1:iter)
                           printFlag = FALSE
                           ))
           pmm_Data <- complete(PMM, method="long")
-          # fit <- with(PMM, lm(Y ~ X+ I(X^2)))
-          # result <- summary(pool(fit), conf.int = TRUE, conf.level = .9)
+                                        # fit <- with(PMM, lm(Y ~ X+ I(X^2)))
+                                        # result <- summary(pool(fit), conf.int = TRUE, conf.level = .9)
+
+### KML: The two above lines that you've commented out are pretty much correct
+### in terms of analyzing the MI data. Why aren't you using these in your
+### analyze() function?
+            
           # #Store
           # storage[con, ] <- c(result$estimate, 
           #                     result$std.error,
@@ -214,6 +238,10 @@ df <- df[order(df$Condition),]
 
 ## Summarize
 
+### KML: Don't put the simulation and analysis code in the same script. Your
+### simulation script needs to run in "batch mode", but you'll do the analysis
+### interactively. So, don't include anything in the script that does not
+### directly serve the data generating function of the simulation.
 
 ## Bias estimations -----------------------------------------------------------------------------------------------------
 
