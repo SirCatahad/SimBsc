@@ -10,6 +10,9 @@ source("init.R")
 source("simMissingness.R")
 source("sim_functions.R")
 
+### KML: The fact that nearly all of this script is copy-pasted from 'run.R'
+### should be a strong indication that you can improve the efficiency of your
+### code.
 
 set.seed(103415)
 
