@@ -218,6 +218,8 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
                                            "Quadratic")))
     }
     
+    
+    
     ## Get relevant information
     storage[con, ] <- c(analyze(data, study), paste0("complete_data_cov",cv), iter)
     ## Update counter
@@ -305,4 +307,3 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
   }
   storage
 }
-
