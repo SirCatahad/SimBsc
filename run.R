@@ -26,10 +26,10 @@ for(i in 1:iter)
   storage_i[[i]] <- runIteration(covariances, parameters, km, mtype, snr, "study1", i)
   
   ##Save to disk every 50 iterations
-  if(i %% 2==0)
+  if(i %% 50==0)
   {
     saveRDS(storage_i[!sapply(storage_i,is.null)],
-            file = paste0("../data/study1/data_iteration_",i-1,"_",i,".rds")
+            file = paste0("../data/study1/data_iteration_",i-49,"_",i,".rds")
     )
     storage_i <- vector(mode="list",iter)
   }
