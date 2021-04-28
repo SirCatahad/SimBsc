@@ -15,7 +15,6 @@ set.seed(162551)
 #Will be a few Megabytes. Probably not a good idea if it gets larger
 storage_i <- vector(mode="list",iter)
 
-
 ## Main Simulation loop -----------------------------------------------------------------------------------------------------
 #Study 1
 for(i in 1:iter)
@@ -33,7 +32,6 @@ for(i in 1:iter)
   }
   #  savetodisk
 }
-
 
 ## Read in all the files
 files <- list.files(path = "../data/study1/", pattern = "\\.rds$", full.names = TRUE)
