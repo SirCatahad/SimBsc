@@ -1,90 +1,50 @@
-##Libraries
-library("SimDesign") ### KML: Are you actually using this library?
-
 # Functions
 ## simData ------------------------------------------------------------------------------------------------------
-simData <- function(n, coefficients, covariance, r.sqrd)
+simData <- function(n, covariance, mod=NULL)
 {
-
-### KML: You only have 1 X variable. You can generate X as standard normal and
-### get rid of all the marix operations. You don't need to worry about defining
-### 'nrpred' or 'covariance'.
-    
-  #Construct covariance matrix
-  nrpred <- length(coefficients) - 1
-  sigma <- matrix(covariance, nrpred, nrpred)
-  diag(sigma) <- 1.0
   
-  #Generate data
-  X <- rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma)
-
-  #Generate error termn
-  beta <- covariance ### KML: Why is beta = covariance? Where are you using
-                     ### 'coefficients[2]'?
-  if(r.sqrd > 0)
+  #In the second study, the data generation model equals beta*x^2
+  #In the first it is beta*x.
+  if(is.null(mod))
   {
-    var.model <- t(beta) %*% cov(X) %*% beta
-    var.residual <- (var.model/r.sqrd) - var.model
-    U = rnorm(n, mean = 0, sd = sqrt(var.residual))
-    #compute Y
-    Y <- coefficients[1] + X  %*% beta + U
-    data <- data.frame(X, Y)
+    X <- data.frame(rnorm(n = n, mean = 0, sd = 1))
+    
   } else {
-### KML: You can just simulate two independent normal variates here. The mean of
-### Y is just the intercept and the variance is the residual variance.
-      
-    nrpred <- length(coefficients)
-    sigma <- matrix(covariance, nrpred, nrpred)
-    diag(sigma) <- 1.0
-    data <- data.frame(rmvnorm(n = n, mean = rep(0, nrpred), sigma = sigma))
-    colnames(data) <- c("X", "Y")
+    X <- data.frame(rnorm(n = n, mean = 1, sd = 1))
   }
-  cov(data) ### KML: Don't put useless calculations in your functions.
-  cov(X)
-  #Return data
-  data
-}
-
-## sim Data for quadratic function-------------------------------------------------------------------------------
-simData2 <- function(n, coefficients, covariance, r.sqrd)
-{
-    ### KML: Same issue as above w.r.t. the single X variable. 
-    
-  #Construct covariance matrix
-  nrpred <- length(coefficients) - 1
-  sigma <- matrix(covariance, nrpred, nrpred)
-  diag(sigma) <- 1.0
   
-  #Generate data
-  X <- rmvnorm(n = n, mean = rep(1, nrpred), sigma = sigma)
+  #Beta is equal to the covariance
+  beta <- covariance 
   
   #Generate error termn
-  beta <- covariance
-  if(r.sqrd > 0)
+  U = rnorm(n, mean=0, sd=sqrt(100))
+  
+  
+  cor(x,y)^2 = cov(x,y)^2/sd(x)^2 + 2sd(x)*sd(y) + sd(y)^2
+  
+  R^2 * (sd(x)*sd(y))^2 = cov(x,y)^2
+  
+  R^2 * sd(x)^2 + 2*sd(x)*sd(x) + sd(y)^2 = cov(x,y)^2
+  
+  0.1 * 100 + 20 + 1 = cov(x,y)^2
+  
+  0.5 * 121 = 60.5 
+  
+  
+  
+  #compute Y, Intercept will be zero.
+  if(is.null(mod))
   {
-### KML: You need to combine X and X^2 into a single predictor matrix before
-### computing the residual variance
-    var.model <- t(beta) %*% cov(X) %*% beta
-    var.residual <- (var.model/r.sqrd) - var.model
-    U = rnorm(n, mean = 0, sd = sqrt(var.residual))
-                                        #compute Y
+    Y <- beta * X + U
+  } else {
+    
+    Y <-   beta * X^2 + U
+  }
+  
+  data <- data.frame(X, Y)
+  colnames(data) <- c("X", "Y")
 
-### KML: Where's your linear term?
-    Y <- (X * X)  %*% beta + U
-    data <- data.frame(X, Y)
-  }
-  else
-  {
-    nrpred <- length(coefficients)
-    sigma <- matrix(covariance, nrpred, nrpred)
-    diag(sigma) <- 1.0
-    data <- data.frame(rmvnorm(n = n, mean = rep(1, nrpred), sigma = sigma))
-    colnames(data) <- c("X", "Y")
-    #data["Y"] <- 2*(data["Y"]*data["Y"])
-  }
-  
-  
-  #Return data
+  ## Return
   data
 }
 
@@ -93,14 +53,6 @@ simData2 <- function(n, coefficients, covariance, r.sqrd)
 # mechanism  - the mechanism of missing data, by default MCAR
 # percent    - the proportion of observations that should be set to missing (NA)
 # indices    - A vector of indices indicating which columns should contain missing values
-
-### KML: This function doesn't make much sense. You're returning the response
-### vector, which is the same thing returned by the simLinearMissingness()
-### function. So, why what simLinearMissingness() in another function with the
-### same return value? You need a function to generate MCAR missingness, but it
-### doesn't have to also generate MAR missingness. If you create a combined
-### function, it should take some complete data and return incomplete data.
-
 
 makeMissing <- function(data, 
                         mechanism="MCAR", 
@@ -111,14 +63,16 @@ makeMissing <- function(data,
   #MAR missing data mechanism
   if(mechanism=="MAR")
   {
-    out <- simLinearMissingness(pm       = pm,
+    tmp <- simLinearMissingness(pm       = pm,
                                 data     = data,
                                 snr      = snr,
                                 preds    = preds,
                                 type     = "high",
                                 optimize = FALSE)
     
-    out
+    data[tmp$r,1] <- NA
+    data
+    
   }
   
   #MCAR missing data mechanism
@@ -127,61 +81,64 @@ makeMissing <- function(data,
     r <- sample(1:nrow(data), nrow(data)*pm)
     tmp <- rep(FALSE, nrow(data))
     tmp[r] <- TRUE
-    r <- tmp
-    out <- list(r   = r)#,
-                #eta = eta2,
-                #auc = auc,
-                #snr = sd(eta) / sqrt(var(eta2) - var(eta)))
-    #return
-    out
+    data[tmp,1] <- NA
+    data
   }
   else
   {
     stop("Undefined or unsupported missing data mechanism.")
   }
 }
-## zip function -------------------------------------------------------------------------------------------------------------------
-## R implementation of Pythons zip() function
-zip <- function(...) 
-{
-  mapply(list, ..., SIMPLIFY = FALSE)
-}
 
-## Analyze (probably unnecessary)------------------------------------------------------------------------------------------------
-## Analyze
-## Extracts relevant information from datasets, namely:
-## - Intercept and slope coefficients
-## - confidence intervals
-## - Standard errors
+## Analyze------------------------------------------------------------------------------------------------
 
-### KML: This function isn't really fit for purpose, for two reasons:
-###      1. It won't work for MI data. You can use the with.mids() function to
-###         fit the models to the imputed data.
-###      2. You're saving a bunch of stuff that you don't need. You only need
-###         the coefficients and CIs.
-
-analyze <- function(data)
+analyze <- function(data, study)
 {
   #Remove NAs
   data <- data[complete.cases(data),]
   #run regression model
-  reg <- lm(Y ~ ., data = data)
+  if(study == "study1")
+  {
+    reg <- lm(Y ~ X, data = data)
+  } else {
+    reg <- lm(Y ~ X + I(X^2), data = data)
+  }
+  
   
   #build output
-  out <- list(
-    cov           = cov(data),
-    coefficients  = reg$coefficients,
-    residuals     = reg$residuals,
-    regsum        = summary(reg),
-    c_int         = confint(reg)
-  )
-  
+  out <- c(reg$coefficients[-1],
+           confint(reg)[-1,c(1,2)])
   out
 }
+
+analyze_MI <- function(MI_object, study)
+{
+  if(study=="study1")
+  {
+    fit <- with(MI_object, lm(Y ~ X))
+  } else {
+    fit <- with(MI_object, lm(Y ~ X + I(X^2)))
+  }
+  
+  
+  result <- summary(pool(fit), conf.int = TRUE, conf.level = .95)
+  
+  #build output
+  out <- c(result$estimate[-1],
+           result$`2.5 %`[-1],
+           result$`97.5 %`[-1])
+  out
+}
+
+
+##
+## Visualization stuff ---------------------------
 
 ### KML: I haven't checked any of the analysis/visualization code yet. You need
 ### to get the simulation running correctly before worrying about visualizing
 ### the results.
+
+### BP : True, on it
 
 makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
 {
@@ -220,3 +177,138 @@ makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
     geom_vline(xintercept = xint)
   plt
 }
+
+## Run one iteration --------------------------------
+
+runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
+{
+  
+  #Data generation and storage
+  if(study=="study1")
+  {
+    storage <- data.frame(matrix(0,
+                                 nrow= 93, #nr of conditions.
+                                 ncol=  5  #saved variables
+    ))
+    colnames(storage) <- c("Slope X",
+                           "conf.slope.X.low",
+                           "conf.slope.X.high",
+                           "Condition",
+                           "Iteration")
+  } else {
+    storage <- data.frame(matrix(0,
+                                 nrow= 93, #nr of conditions.
+                                 ncol=  8  #saved variables
+    ))
+    colnames(storage) <- c("Slope X",
+                           "Slope X2",
+                           "conf.slope.X.low",
+                           "conf.slope.X2.low",
+                           "conf.slope.X.high",
+                           "conf.slope.X2.high",
+                           "Condition",
+                           "Iteration")
+  }
+  
+  
+  ## Storing all important variables plus an identifier so we can easily order by conditions later on
+  
+  con <- 1
+  
+  
+  
+  for(cv in covariances) 
+  {
+    #Generate data with given parameters
+    data <- try(with(parameters, simData(n    = n,
+                                         covariance   = cv)))
+    
+    
+    ## Get relevant information
+    storage[con, ] <- c(analyze(data, study), paste0("complete_data_cov",cv), iter)
+    ## Update counter
+    con <- con+1 
+
+    #Poke holes into the dataset
+    data_MCAR <- try(with(parameters, makeMissing(data      = data,
+                                                 mechanism = "MCAR",
+                                                 pm        = miss
+    )))
+    
+    #Store
+    storage[con, ] <- c(analyze(data_MCAR, study), paste0("incomplete_MCAR_cov",cv), iter)
+    con <- con+1
+    
+    PDMI <- try(mice(data   = data_MCAR,
+                     m      = 10,
+                     method = "norm",
+                     printFlag = FALSE
+    ))
+    #Storage
+    storage[con, ] <- c(analyze_MI(PDMI, study), paste0("pdmi_mcar_cov",cv), iter)
+    
+    con <- con+1
+    
+    conds <- expand.grid(mtype, km)
+    
+    ## Impute with PMM
+    for(cs in 1:nrow(conds))
+    {
+      PMM <- try(mice(data   = data_MCAR,
+                      m      = 10,
+                      method = "pmm",
+                      matchtype = conds[cs,1],
+                      donors = conds[cs,2],
+                      printFlag = FALSE
+      ))
+
+      
+      
+      #Store
+      storage[con, ] <- c(analyze_MI(PMM, study), paste0("pmm_mcar_cov",cv, "_k", conds[cs,2],"_m", conds[cs,1]), iter)
+      con <- con+1
+    }
+    
+    for(s in snr)
+    {
+      data_MAR <- try(with(parameters, makeMissing(data      = data,
+                                                  mechanism = "MAR",
+                                                  pm        = miss,
+                                                  preds     = colnames(data),
+                                                  snr       = s
+      )))
+      
+      #Store
+      storage[con, ] <- c(analyze(data_MAR, study), paste0("incomplete_mar_cov",cv,"_snr",s), iter)
+      con <- con+1
+      
+      PDMI <- try(mice(data   = data_MAR,
+                       m      = 10,
+                       method = "norm",
+                       printFlag = FALSE
+      ))
+      #Storage
+      storage[con, ] <- c(analyze_MI(PDMI, study), paste0("pdmi_mar_cov",cv,"_snr",s), iter)
+      
+      con <- con+1
+      
+      ## Impute with PMM
+      for(cs in 1:nrow(conds))
+      {
+        PMM <- try(mice(data   = data_MAR,
+                        m      = 10,
+                        method = "pmm",
+                        matchtype = conds[cs,1],
+                        donors = conds[cs,2],
+                        printFlag = FALSE
+        ))
+
+        #Store
+        storage[con, ] <- c(analyze_MI(PMM, study), paste0("pmm_mar_cov",cv,"_snr",s,"_k", conds[cs,2],"_m", conds[cs,1]), iter)
+        con <- con+1
+      }
+    }
+  }
+  storage
+}
+
