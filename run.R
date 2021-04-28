@@ -15,8 +15,6 @@ set.seed(162551)
 #Will be a few Megabytes. Probably not a good idea if it gets larger
 storage_i <- vector(mode="list",iter)
 
-#Time it! 
-start_time <- Sys.time()
 
 ## Main Simulation loop -----------------------------------------------------------------------------------------------------
 #Study 1
@@ -35,9 +33,6 @@ for(i in 1:iter)
   }
   #  savetodisk
 }
-end_time <- Sys.time()
-
-end_time - start_time
 
 
 ## Read in all the files
