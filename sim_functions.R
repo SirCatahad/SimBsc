@@ -19,19 +19,6 @@ simData <- function(n, covariance, mod=NULL)
   #Generate error termn
   U = rnorm(n, mean=0, sd=sqrt(100))
   
-  
-  cor(x,y)^2 = cov(x,y)^2/sd(x)^2 + 2sd(x)*sd(y) + sd(y)^2
-  
-  R^2 * (sd(x)*sd(y))^2 = cov(x,y)^2
-  
-  R^2 * sd(x)^2 + 2*sd(x)*sd(x) + sd(y)^2 = cov(x,y)^2
-  
-  0.1 * 100 + 20 + 1 = cov(x,y)^2
-  
-  0.5 * 121 = 60.5 
-  
-  
-  
   #compute Y, Intercept will be zero.
   if(is.null(mod))
   {
@@ -219,10 +206,17 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
   
   for(cv in covariances) 
   {
-    #Generate data with given parameters
-    data <- try(with(parameters, simData(n    = n,
-                                         covariance   = cv)))
-    
+    if(study=="study1")
+    {
+      #Generate data with given parameters
+      data <- try(with(parameters, simData(n    = n,
+                                           covariance   = cv)))
+    } else {
+      #Generate data with given parameters
+      data <- try(with(parameters, simData(n    = n,
+                                           covariance   = cv,
+                                           "Quadratic")))
+    }
     
     ## Get relevant information
     storage[con, ] <- c(analyze(data, study), paste0("complete_data_cov",cv), iter)
