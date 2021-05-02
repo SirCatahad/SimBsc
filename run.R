@@ -16,7 +16,7 @@ set.seed(162551)
 storage_i <- vector(mode="list",iter)
 
 ## Main Simulation loop -----------------------------------------------------------------------------------------------------
-#Study 1
+                                        #Study 1
 for(i in 1:iter)
 {
   ## Run one iteration
@@ -28,7 +28,7 @@ for(i in 1:iter)
     saveRDS(storage_i[!sapply(storage_i,is.null)],
             file = paste0("../data/study1/data_iteration_",i-49,"_",i,".rds")
     )
-    storage_i <- vector(mode="list",iter)
+    storage_i <- vector(mode="list",iter) ### KML: If you're only going to use 50 slots at a time, why not make a length 50 list and compute the index with the modulo?
   }
   #  savetodisk
 }
