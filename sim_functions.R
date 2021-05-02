@@ -14,7 +14,7 @@ simData <- function(n, covariance, mod=NULL)
   }
   
   #Beta is equal to the covariance
-  beta <- covariance 
+  beta <- covariance ### KML: No reason for separate 'beta' and 'covaraince' parameters, also beta =/= covariance here
   
   #Generate error termn
   U = rnorm(n, mean=0, sd=sqrt(100))
@@ -57,7 +57,7 @@ makeMissing <- function(data,
                                 type     = "high",
                                 optimize = FALSE)
     
-    data[tmp$r,1] <- NA
+    data[tmp$r,1] <- NA ### KML: Avoid numeric indicies when you have column/row names
     data
     
   }
@@ -166,7 +166,6 @@ makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
 }
 
 ## Run one iteration --------------------------------
-
 runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
 {
   
@@ -201,9 +200,7 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
   ## Storing all important variables plus an identifier so we can easily order by conditions later on
   
   con <- 1
-  
-  
-  
+        
   for(cv in covariances) 
   {
     if(study=="study1")
@@ -218,7 +215,11 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
                                            "Quadratic")))
     }
     
-    
+### KML: You're not using the try() function correctly. Although, try() will
+### keep your job from crashing, your downstream functions still expect
+### successful execution of all upstream dependencies. You need to check that
+### the output of a try-wrapped function does not have class "try-error" before
+### feeding it into a downstream function.
     
     ## Get relevant information
     storage[con, ] <- c(analyze(data, study), paste0("complete_data_cov",cv), iter)
@@ -230,7 +231,8 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
                                                  mechanism = "MCAR",
                                                  pm        = miss
     )))
-    
+
+       
     #Store
     storage[con, ] <- c(analyze(data_MCAR, study), paste0("incomplete_MCAR_cov",cv), iter)
     con <- con+1
@@ -246,7 +248,7 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
     con <- con+1
     
     conds <- expand.grid(mtype, km)
-    
+                                 
     ## Impute with PMM
     for(cs in 1:nrow(conds))
     {
@@ -264,7 +266,7 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
       storage[con, ] <- c(analyze_MI(PMM, study), paste0("pmm_mcar_cov",cv, "_k", conds[cs,2],"_m", conds[cs,1]), iter)
       con <- con+1
     }
-    
+                                       
     for(s in snr)
     {
       data_MAR <- try(with(parameters, makeMissing(data      = data,

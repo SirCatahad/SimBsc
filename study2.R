@@ -8,6 +8,8 @@ source("init.R")
 source("simMissingness.R")
 source("sim_functions.R")
 
+### KML: It seems a bit silly to have separate run scripts for studies 1 and
+### 2. Why not set the study number as a variable?
 
 set.seed(162551)
 
