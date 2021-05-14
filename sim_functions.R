@@ -1,8 +1,7 @@
 # Functions
 ## simData ------------------------------------------------------------------------------------------------------
-simData <- function(n, covariance, mod=NULL)
+simData <- function(n, beta, mod=NULL)
 {
-  
   #In the second study, the data generation model equals beta*x^2
   #In the first it is beta*x.
   if(is.null(mod))
@@ -12,9 +11,6 @@ simData <- function(n, covariance, mod=NULL)
   } else {
     X <- data.frame(rnorm(n = n, mean = 1, sd = 1))
   }
-  
-  #Beta is equal to the covariance
-  beta <- covariance ### KML: No reason for separate 'beta' and 'covaraince' parameters, also beta =/= covariance here
   
   #Generate error termn
   U = rnorm(n, mean=0, sd=sqrt(100))
@@ -30,7 +26,7 @@ simData <- function(n, covariance, mod=NULL)
   
   data <- data.frame(X, Y)
   colnames(data) <- c("X", "Y")
-
+  
   ## Return
   data
 }
@@ -44,7 +40,6 @@ simData <- function(n, covariance, mod=NULL)
 makeMissing <- function(data, 
                         mechanism="MCAR", 
                         pm, 
-                        preds, 
                         snr=NULL)
 {
   #MAR missing data mechanism
@@ -53,12 +48,12 @@ makeMissing <- function(data,
     tmp <- simLinearMissingness(pm       = pm,
                                 data     = data,
                                 snr      = snr,
-                                preds    = preds,
+                                preds    = "Y",
                                 type     = "high",
                                 optimize = FALSE)
     
-    data[tmp$r,1] <- NA ### KML: Avoid numeric indicies when you have column/row names
-    data
+    data[tmp$r,"X"] <- NA ### KML: Avoid numeric indicies when you have column/row names
+    data                  ### Done!
     
   }
   
@@ -68,7 +63,7 @@ makeMissing <- function(data,
     r <- sample(1:nrow(data), nrow(data)*pm)
     tmp <- rep(FALSE, nrow(data))
     tmp[r] <- TRUE
-    data[tmp,1] <- NA
+    data[tmp,"X"] <- NA
     data
   }
   else
@@ -166,25 +161,28 @@ makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
 }
 
 ## Run one iteration --------------------------------
-runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
+
+runIteration <- function(beta, parameters, km, mtype, snr, study, iter)
 {
-  
   #Data generation and storage
   if(study=="study1")
   {
+    nc <- 6
     storage <- data.frame(matrix(0,
                                  nrow= 93, #nr of conditions.
-                                 ncol=  5  #saved variables
+                                 ncol=  nc #saved variables
     ))
     colnames(storage) <- c("Slope X",
                            "conf.slope.X.low",
                            "conf.slope.X.high",
                            "Condition",
-                           "Iteration")
+                           "Iteration",
+                           "Error")
   } else {
+    nc <- 9
     storage <- data.frame(matrix(0,
                                  nrow= 93, #nr of conditions.
-                                 ncol=  8  #saved variables
+                                 ncol=  nc #saved variables
     ))
     colnames(storage) <- c("Slope X",
                            "Slope X2",
@@ -193,36 +191,40 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
                            "conf.slope.X.high",
                            "conf.slope.X2.high",
                            "Condition",
-                           "Iteration")
+                           "Iteration",
+                           "Error")
   }
   
   
   ## Storing all important variables plus an identifier so we can easily order by conditions later on
   
   con <- 1
-        
-  for(cv in covariances) 
+  
+  
+  for(b in beta) 
   {
     if(study=="study1")
     {
       #Generate data with given parameters
       data <- try(with(parameters, simData(n    = n,
-                                           covariance   = cv)))
+                                           beta   = b)), 
+                  TRUE)
     } else {
       #Generate data with given parameters
       data <- try(with(parameters, simData(n    = n,
-                                           covariance   = cv,
-                                           "Quadratic")))
+                                           beta   = b,
+                                           "Quadratic")), 
+                  TRUE)
     }
     
-### KML: You're not using the try() function correctly. Although, try() will
-### keep your job from crashing, your downstream functions still expect
-### successful execution of all upstream dependencies. You need to check that
-### the output of a try-wrapped function does not have class "try-error" before
-### feeding it into a downstream function.
-    
     ## Get relevant information
-    storage[con, ] <- c(analyze(data, study), paste0("complete_data_cov",cv), iter)
+    if(class(data) == "try-error")
+    {
+      storage[con, ] <- c(rep(NA,nc-3), paste0("complete_data_cov",b), iter, data)
+    } else {
+      storage[con, ] <- c(analyze(data, study), paste0("complete_data_cov",b), iter, NA)
+    }
+    
     ## Update counter
     con <- con+1 
 
@@ -230,25 +232,36 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
     data_MCAR <- try(with(parameters, makeMissing(data      = data,
                                                  mechanism = "MCAR",
                                                  pm        = miss
-    )))
-
-       
+    )), 
+    TRUE)
+    
     #Store
-    storage[con, ] <- c(analyze(data_MCAR, study), paste0("incomplete_MCAR_cov",cv), iter)
+    if(class(data_MCAR) == "try-error")
+    {
+      storage[con, ] <- c(rep(NA,nc-3), paste0("incomplete_MCAR_cov",b), iter, data_MCAR)
+    } else {
+      storage[con, ] <- c(analyze(data_MCAR, study), paste0("incomplete_MCAR_cov",b), iter, NA)
+    }
     con <- con+1
     
     PDMI <- try(mice(data   = data_MCAR,
                      m      = 10,
                      method = "norm",
-                     printFlag = FALSE
-    ))
+                     printFlag = FALSE,
+                     maxit=1
+    ), 
+    TRUE)
     #Storage
-    storage[con, ] <- c(analyze_MI(PDMI, study), paste0("pdmi_mcar_cov",cv), iter)
-    
+    if(class(PDMI) == "try-error")
+    {
+      storage[con, ] <- c(rep(NA,nc-3), paste0("pdmi_mcar_cov",b), iter, PDMI)
+    } else {
+      storage[con, ] <- c(analyze_MI(PDMI, study), paste0("pdmi_mcar_cov",b), iter, NA)
+    }
     con <- con+1
     
     conds <- expand.grid(mtype, km)
-                                 
+    
     ## Impute with PMM
     for(cs in 1:nrow(conds))
     {
@@ -257,36 +270,52 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
                       method = "pmm",
                       matchtype = conds[cs,1],
                       donors = conds[cs,2],
-                      printFlag = FALSE
-      ))
+                      printFlag = FALSE,
+                      maxit=1
+      ),TRUE)
 
       
       
       #Store
-      storage[con, ] <- c(analyze_MI(PMM, study), paste0("pmm_mcar_cov",cv, "_k", conds[cs,2],"_m", conds[cs,1]), iter)
+      if(class(PMM) == "try-error")
+      {
+        storage[con, ] <- c(rep(NA,nc-3), paste0("pmm_mcar_cov",b, "_k", conds[cs,2],"_m", conds[cs,1]), iter, PMM)
+      } else {
+        storage[con, ] <- c(analyze_MI(PMM, study), paste0("pmm_mcar_cov",b, "_k", conds[cs,2],"_m", conds[cs,1]), iter, NA)
+      }
       con <- con+1
     }
-                                       
+    
     for(s in snr)
     {
       data_MAR <- try(with(parameters, makeMissing(data      = data,
                                                   mechanism = "MAR",
                                                   pm        = miss,
-                                                  preds     = colnames(data),
                                                   snr       = s
-      )))
+      )),TRUE)
       
       #Store
-      storage[con, ] <- c(analyze(data_MAR, study), paste0("incomplete_mar_cov",cv,"_snr",s), iter)
+      if(class(data_MAR) == "try-error")
+      {
+        storage[con, ] <- c(rep(NA,nc-3), paste0("incomplete_mar_cov",b,"_snr",s), iter, data_MAR)
+      } else {
+        storage[con, ] <- c(analyze(data_MAR, study), paste0("incomplete_mar_cov",b,"_snr",s), iter, NA)
+      }
       con <- con+1
       
       PDMI <- try(mice(data   = data_MAR,
                        m      = 10,
                        method = "norm",
-                       printFlag = FALSE
-      ))
+                       printFlag = FALSE,
+                       maxit=1
+      ),TRUE)
       #Storage
-      storage[con, ] <- c(analyze_MI(PDMI, study), paste0("pdmi_mar_cov",cv,"_snr",s), iter)
+      if(class(PDMI) == "try-error")
+      {
+        storage[con, ] <- c(rep(NA, nc-3), paste0("pdmi_mar_cov",b,"_snr",s), iter, PDMI)
+      } else {
+        storage[con, ] <- c(analyze_MI(PDMI, study), paste0("pdmi_mar_cov",b,"_snr",s), iter, NA)
+      }
       
       con <- con+1
       
@@ -298,11 +327,17 @@ runIteration <- function(covariances, parameters, km, mtype, snr, study, iter)
                         method = "pmm",
                         matchtype = conds[cs,1],
                         donors = conds[cs,2],
-                        printFlag = FALSE
-        ))
+                        printFlag = FALSE,
+                        maxit=1
+        ),TRUE)
 
         #Store
-        storage[con, ] <- c(analyze_MI(PMM, study), paste0("pmm_mar_cov",cv,"_snr",s,"_k", conds[cs,2],"_m", conds[cs,1]), iter)
+        if(class(PMM) == "try-error")
+        {
+          storage[con, ] <- c(rep(NA,nc-3), paste0("pmm_mar_cov",b,"_snr",s,"_k", conds[cs,2],"_m", conds[cs,1]), iter, PMM)
+        } else {
+          storage[con, ] <- c(analyze_MI(PMM, study), paste0("pmm_mar_cov",b,"_snr",s,"_k", conds[cs,2],"_m", conds[cs,1]), iter, NA)
+        }
         con <- con+1
       }
     }
