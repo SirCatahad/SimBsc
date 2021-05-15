@@ -1,34 +1,57 @@
 library("ggplot2")
 library("gridExtra")
 
+source("init.R")
+source("sim_functions.R")
+
+
+## Read in all the files
+files <- list.files(path = outputDir, pattern = "\\.rds$", full.names = TRUE)
+df <- lapply(files, readRDS)
+
+## We now have a list of lists of data frames
+df <- do.call("rbind", df)
+##After this we have a list of data frames
+df <- do.call("rbind", df)
+##Now we have the combined data frame
+
+## For some reason all saved data were characters, so we need to transform them
+df[c("Slope X", "conf.slope.X.low", "conf.slope.X.high", "Iteration")] <- sapply(df[c("Slope X", "conf.slope.X.low", "conf.slope.X.high", "Iteration")], as.numeric)
+
+
+## Check whether all iterations converge
+all(is.na(df$Error))
+
+##No errors found as the line above returned true, moving on
+
 ### Analysis and Visualization
 ## Bias estimations -----------------------------------------------------------------------------------------------------
 
 
 bias_df <- df
 ## First, zero all conditions
-complete_df <- data.frame(matrix(0,nrow=99,0))
+complete_df <- data.frame(matrix(0,nrow=93,0))
 
 ## Bias is calculated as: 1/iter * sum_i=1_nsim ( theta_hat_i - theta ).
 ## First, we get each deviation
-bias_df[(bias_df["Condition"]>33),"Slope"] <- bias_df[(bias_df["Condition"]>33),"Slope"] - covariances[2]
-bias_df[(bias_df["Condition"]>66),"Slope"] <- bias_df[(bias_df["Condition"]>66),"Slope"] - (covariances[3]-covariances[2])
+bias_df[grepl('cov3.33', bias_df$Condition),"Slope X"] <- bias_df[grepl('cov3.33', bias_df$Condition),"Slope X"] - betav[2]
+bias_df[grepl('cov10', bias_df$Condition),"Slope X"] <- bias_df[grepl('cov10', bias_df$Condition),"Slope X"] - betav[3]
 
 ## Then we sum (per condition) and divide by nsum(iter)
-complete_df[c("Condition", "Slope")] <- aggregate(bias_df["Slope"], by=bias_df["Condition"], FUN=(function(x) sum(x)/iter))
+complete_df[c("Condition", "Slope X")] <- aggregate(bias_df["Slope X"], by=bias_df["Condition"], FUN=(function(x) sum(x)/iter))
 
 ## MCSE(Bias) is calculated by: sqrt(1/nsim-1 * sum_i=1_nsim((theta_hat_i - theta_mean)^2)/nsim). This means we need a
 ## Theta_mean by condition
-bias_df["Slope Mean Group"] <- ave(x=unlist(df["Slope"]), df["Condition"])
+bias_df["Slope Mean Group"] <- ave(x=unlist(df["Slope X"]), df["Condition"])
 
 
 ## Now calculate Monte carlo standard error of bias (MCSE(Bias))
-complete_df[c("Condition", "Slope.SE")] <- aggregate(bias_df["Slope"], by=bias_df["Condition"],
+complete_df[c("Condition", "Slope.SE")] <- aggregate(bias_df["Slope X"], by=bias_df["Condition"],
                                                      FUN=function(x) sqrt((1/(iter-1)*sum((x^2)))/iter ))
 
 ## And finally Monte Carlo CIs
-complete_df["slp.low"] <- sapply(complete_df["Slope"], FUN= (function(x,y) x - 1.96*y), complete_df["Slope.SE"])
-complete_df["slp.high"] <- sapply(complete_df["Slope"], FUN= (function(x,y) x + 1.96*y), complete_df["Slope.SE"])
+complete_df["slp.low"] <- sapply(complete_df["Slope X"], FUN= (function(x,y) x - 1.96*y), complete_df["Slope.SE"])
+complete_df["slp.high"] <- sapply(complete_df["Slope X"], FUN= (function(x,y) x + 1.96*y), complete_df["Slope.SE"])
 
 rm(bias_df)
 
@@ -42,21 +65,22 @@ rm(bias_df)
 df["CI_slp_cov"] <- NA
 
 ##Logical column whether the true parameter lies in the 95% confidence interval
+df[grepl('cov0', df$Condition), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
+  ifelse((betav[1] >= x && betav[1] <= y), 1, 0)),
+  y=df[grepl('cov0', df$Condition), "conf.slope.X.high"],
+  x=df[grepl('cov0', df$Condition), "conf.slope.X.low"])
 
-df[(df["Condition"]>33), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
-  ifelse((covariances[2] >= x && covariances[2] <= y), 1, 0)),
-  y=df[(df["Condition"]>33), "conf.slope.high"],
-  x=df[(df["Condition"]>33), "conf.slope.low"])
+df[grepl('cov3.33', df$Condition), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
+  ifelse((betav[2] >= x && betav[2] <= y), 1, 0)),
+  y=df[grepl('cov3.33', df$Condition), "conf.slope.X.high"],
+  x=df[grepl('cov3.33', df$Condition), "conf.slope.X.low"])
 
-df[(df["Condition"]>66), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
-  ifelse((covariances[3] >= x && covariances[3] <= y), 1, 0)),
-  y=df[(df["Condition"]>66), "conf.slope.high"],
-  x=df[(df["Condition"]>66), "conf.slope.low"])
+df[grepl('cov10', df$Condition), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
+  ifelse((betav[3] >= x && betav[3] <= y), 1, 0)),
+  y=df[grepl('cov10', df$Condition), "conf.slope.X.high"],
+  x=df[grepl('cov10', df$Condition), "conf.slope.X.low"])
 
-df[(df["Condition"]<=33), "CI_slp_cov"] <- mapply(FUN=(function(x,y) 
-  ifelse((covariances[1] >= x && covariances[1] <= y), 1, 0)),
-  y=df[(df["Condition"]<=33), "conf.slope.high"],
-  x=df[(df["Condition"]<=33), "conf.slope.low"])
+
 
 
 
@@ -81,17 +105,17 @@ complete_df["CIcov.slp.high"] <- as.vector(sapply(complete_df["CI_slp_cov"], FUN
 ## The standard deviation of β over 1,000 replications (henceforth the ‘empirical standard error’)
 
 ## Empirical SE is calculated as: sqrt(1/(nsim-1) * sum_i=1_nsim ( Theta_hat_i - Theta_mean)^2)
-df["Slope Mean"] <- ave(x=unlist(df["Slope"]), df["Condition"])
+df["Slope Mean"] <- ave(x=unlist(df["Slope X"]), df["Condition"])
 
 
 df["Empirical SE Slope"] <- mapply(FUN= function(th, tm) sqrt(sum((th - tm)^2)/(iter-1)), 
-                                   df$Slope, 
+                                   df$`Slope X`, 
                                    df$`Slope Mean`)
 
 
 
 df["tmp"] <- mapply(FUN=function(th, tm) (th-tm)^2,
-                    df$Slope,
+                    df$`Slope X`,
                     df$`Slope Mean`)
 
 
@@ -101,7 +125,7 @@ complete_df["Empirical SE"] <- as.vector(sapply(complete_df["Empirical SE"], FUN
 
 #sqrt((1/(iter-1)) * sum((th - tm)^2)), df$`Slope Mean`)
 
-#Standard Error of the standard error. Meta Standard Error. Have I gone too far?
+#Standard Error of the standard error. Meta Standard Error. Have we gone too far?
 complete_df[c("Condition","SE SE")] <- aggregate(df$`Empirical SE Slope`, by=df["Condition"], FUN=sd)
 
 complete_df["SE.slp.low"] <- as.vector(sapply(complete_df["Empirical SE"], FUN= (function(x,y) x - 1.96*y/iter), complete_df$`SE SE` ))
@@ -109,65 +133,40 @@ complete_df["SE.slp.high"] <- as.vector(sapply(complete_df["Empirical SE"], FUN=
 
 ## Data prep-----------------------------------------------------------------------------------------------------
 
-## Method used per conditions
-complete_df["method"] <- c(rep("Complete",3),
-                           rep("Incomplete",3),
-                           rep("PDMI", 3),
-                           rep("PMM - Type I", 12),
-                           rep("PMM - Type II", 12))
-
-## Identifier for k's used
-complete_df["k"]      <- c(rep(" ", 9),
-                           rep("k =  1",3),
-                           rep("k =  3",3),
-                           rep("k =  5",3),
-                           rep("k = 10",3),
-                           rep("k =  1",3),
-                           rep("k =  3",3),
-                           rep("k =  5",3),
-                           rep("k = 10",3))
-
-## Add color marker for Conditions
-complete_df["color"] <- c(rep("Complete",3),
-                          rep(c("MCAR","Weak MAR","Strong MAR"),10))
-
-complete_df <- data.frame(complete_df)
 
 
-##Split by covariance for better overview
-plot_df <- split(complete_df, rep(1:3, length.out = nrow(complete_df), each = ceiling(nrow(complete_df)/3)))
-
-plotlist <- list()
-
+plot_df_a <- complete_df[grepl('cov0', complete_df$Condition),]
+plot_df_b <- complete_df[grepl('cov3.33', complete_df$Condition),]
+plot_df_c <- complete_df[grepl('cov10', complete_df$Condition),]
 
 ## Plots, drawings and everything neat -----------------------------------------------------------------------------------------------------
 
 ##Bias Slope plot group
-plot1_1 <- makePlot(data   = plot_df[[1]], 
+plot1_1 <- makePlot(data   = plot_df_a, 
                     xint   = 0, 
                     title  = "β = 0", 
-                    x      = plot_df[[1]]$Slope, 
-                    xlow   = plot_df[[1]]$slp.low, 
-                    xhigh  = plot_df[[1]]$slp.high,
-                    y      = plot_df[[1]]$Condition,
+                    x      = plot_df_a$Slope, 
+                    xlow   = plot_df_a$slp.low, 
+                    xhigh  = plot_df_a$slp.high,
+                    y      = plot_df_a$Condition,
                     xlimits= c(-1,1))
 
 plot1_2 <- makePlot(data   = plot_df[[2]], 
                     xint   = 0, 
                     title  = "β = 3.33", 
-                    x      = plot_df[[2]]$Slope, 
-                    xlow   = plot_df[[2]]$slp.low, 
-                    xhigh  = plot_df[[2]]$slp.high,
-                    y      = plot_df[[2]]$Condition,
-                    xlimits= c(-1.5,1.5))
+                    x      = plot_df_b$Slope, 
+                    xlow   = plot_df_b$slp.low, 
+                    xhigh  = plot_df_b$slp.high,
+                    y      = plot_df_b$Condition,
+                    xlimits= c(-1,1))
 
-plot1_3 <- makePlot(data   = plot_df[[3]], 
+plot1_3 <- makePlot(data   = plot_df_c, 
                     xint   = 0, 
                     title  = "β = 10", 
-                    x      = plot_df[[3]]$Slope, 
-                    xlow   = plot_df[[3]]$slp.low, 
-                    xhigh  = plot_df[[3]]$slp.high,
-                    y      = plot_df[[3]]$Condition,
+                    x      = plot_df_c$Slope, 
+                    xlow   = plot_df_c$slp.low, 
+                    xhigh  = plot_df_c$slp.high,
+                    y      = plot_df_c$Condition,
                     xlimits= c(-1,1))
 
 
@@ -249,4 +248,3 @@ grid.arrange(plot3_1, plot3_2, plot3_3, ncol=3, nrow=1, top="Empirical Standard 
 ## cbind all data frames, plot stuff                          (done)
 ## Figure out how to properly space in ggplot                 (done)
 ## fix xlimits                                                (kinda done)
-
