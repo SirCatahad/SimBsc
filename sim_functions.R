@@ -72,6 +72,15 @@ makeMissing <- function(data,
   }
 }
 
+## Empirical Standard Error -----------------------------------------------------------------------------------------
+calcESE <- function(th, tm, itr)
+{
+  out <- sqrt((1/(itr-1))*(sum((th-tm)^2)))
+  out
+}
+
+
+
 ## Analyze------------------------------------------------------------------------------------------------
 
 analyze <- function(data, study)
