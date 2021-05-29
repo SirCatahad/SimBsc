@@ -94,7 +94,7 @@ complete_df["CI_slp_cov"] <- complete_df["CI_slp_cov"]*100
 
 
 ## SE of the slope CI coverage
-complete_df[c("Condition", "CI.slp.se")] <- as.vector(sapply(complete_df$CI_slp_cov, FUN=function(x) sqrt((x*(100-x))/iter)))
+complete_df["CI.slp.se"] <- as.vector(sapply(complete_df$CI_slp_cov, FUN=function(x) sqrt((x*(100-x))/iter)))
 
 ## Compute Monte Carlo CIs
 complete_df["CIcov.slp.low"] <- as.vector(sapply(complete_df["CI_slp_cov"], FUN= (function(x,y) x - 1.96*y), complete_df$CI.slp.se ))
@@ -105,31 +105,34 @@ complete_df["CIcov.slp.high"] <- as.vector(sapply(complete_df["CI_slp_cov"], FUN
 ## The standard deviation of β over 1,000 replications (henceforth the ‘empirical standard error’)
 
 ## Empirical SE is calculated as: sqrt(1/(nsim-1) * sum_i=1_nsim ( Theta_hat_i - Theta_mean)^2)
-df["Slope Mean"] <- ave(x=unlist(df["Slope X"]), df["Condition"])
+df["Slope_Mean"] <- ave(x=unlist(df["Slope X"]), df["Condition"])
 
 
-df["Empirical SE Slope"] <- mapply(FUN= function(th, tm) sqrt(sum((th - tm)^2)/(iter-1)), 
-                                   df$`Slope X`, 
-                                   df$`Slope Mean`)
+# df["ESE_Slope"] <- mapply(FUN=calcESE, 
+#                           df$`Slope X`, 
+#                           df$Slope_Mean,
+#                           itr=iter)
+# 
+# complete_df[c("Condition", "ESE")] <- aggregate(df$ESE_Slope,
+#                                                 by=df["Condition"],
+#                                                 FUN=sum)
 
 
 
-df["tmp"] <- mapply(FUN=function(th, tm) (th-tm)^2,
-                    df$`Slope X`,
-                    df$`Slope Mean`)
+complete_df[c("Condition", "ESE")] <- aggregate(df$`Slope X` , 
+                                                by=df["Condition"], 
+                                                FUN=calcESE,
+                                                tm=df$Slope_Mean,
+                                                itr=iter)
 
 
-complete_df[c("Condition","Empirical SE")] <- aggregate(df$tmp, by=df["Condition"], FUN= function(x) sum(x))
+#Monte Carlo standard error of the empirical standard error
+complete_df["MCSE_ESE"] <- as.vector(sapply(complete_df$ESE, FUN= function(x) x/(sqrt(2*(iter-1)))))
 
-complete_df["Empirical SE"] <- as.vector(sapply(complete_df["Empirical SE"], FUN= function(x) sqrt(1/(iter-1) * x )))
+#complete_df[c("Condition", "MCSE_ESE")] <- aggregate(df$MCSE_ESE, by=df["Condition"], FUN= function(x) sum(x))
 
-#sqrt((1/(iter-1)) * sum((th - tm)^2)), df$`Slope Mean`)
-
-#Standard Error of the standard error. Meta Standard Error. Have we gone too far?
-complete_df[c("Condition","SE SE")] <- aggregate(df$`Empirical SE Slope`, by=df["Condition"], FUN=sd)
-
-complete_df["SE.slp.low"] <- as.vector(sapply(complete_df["Empirical SE"], FUN= (function(x,y) x - 1.96*y/iter), complete_df$`SE SE` ))
-complete_df["SE.slp.high"] <- as.vector(sapply(complete_df["Empirical SE"], FUN= (function(x,y) x + 1.96*y/iter), complete_df$`SE SE` ))
+complete_df["SE.slp.low"] <- as.vector(sapply(complete_df["ESE"], FUN= (function(x,y) x - 1.96*y), complete_df$MCSE_ESE ))
+complete_df["SE.slp.high"] <- as.vector(sapply(complete_df["ESE"], FUN= (function(x,y) x + 1.96*y), complete_df$MCSE_ESE ))
 
 ## Data prep-----------------------------------------------------------------------------------------------------
 
@@ -141,100 +144,108 @@ plot_df_c <- complete_df[grepl('cov10', complete_df$Condition),]
 
 ## Plots, drawings and everything neat -----------------------------------------------------------------------------------------------------
 
-##Bias Slope plot group
-plot1_1 <- makePlot(data   = plot_df_a, 
-                    xint   = 0, 
-                    title  = "β = 0", 
-                    x      = plot_df_a$Slope, 
-                    xlow   = plot_df_a$slp.low, 
-                    xhigh  = plot_df_a$slp.high,
-                    y      = plot_df_a$Condition,
-                    xlimits= c(-1,1))
-
-plot1_2 <- makePlot(data   = plot_df[[2]], 
-                    xint   = 0, 
-                    title  = "β = 3.33", 
-                    x      = plot_df_b$Slope, 
-                    xlow   = plot_df_b$slp.low, 
-                    xhigh  = plot_df_b$slp.high,
-                    y      = plot_df_b$Condition,
-                    xlimits= c(-1,1))
-
-plot1_3 <- makePlot(data   = plot_df_c, 
-                    xint   = 0, 
-                    title  = "β = 10", 
-                    x      = plot_df_c$Slope, 
-                    xlow   = plot_df_c$slp.low, 
-                    xhigh  = plot_df_c$slp.high,
-                    y      = plot_df_c$Condition,
-                    xlimits= c(-1,1))
 
 
-grid.arrange(plot1_1, plot1_2, plot1_3, ncol=3, nrow=1, top="Bias")
+p11 <- ggplot(plot_df_a, aes(x=Condition, y=`Slope X`, ymin=slp.low, ymax=slp.high))+
+  geom_pointrange()+
+  geom_hline(yintercept = 0, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
 
-## Confidence Interval coverage plot group
-plot2_1 <- makePlot(data   = plot_df[[1]], 
-                    xint   = 95, 
-                    title  = "β = 0", 
-                    x      = plot_df[[1]]$CI_slp_cov, 
-                    xlow   = plot_df[[1]]$CIcov.slp.low, 
-                    xhigh  = plot_df[[1]]$CIcov.slp.high,
-                    y      = plot_df[[1]]$Condition,
-                    xlimits= c(50,105))
+p12 <- ggplot(plot_df_b, aes(x=Condition, y=`Slope X`, ymin=slp.low, ymax=slp.high))+
+  geom_pointrange()+
+  geom_hline(yintercept = 0, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
 
-plot2_2 <- makePlot(data   = plot_df[[2]], 
-                    xint   = 95, 
-                    title  = "β = 3.33", 
-                    x      = plot_df[[2]]$CI_slp_cov, 
-                    xlow   = plot_df[[2]]$CIcov.slp.low, 
-                    xhigh  = plot_df[[2]]$CIcov.slp.high,
-                    y      = plot_df[[2]]$Condition,
-                    xlimits= c(50,105))
+p13 <- ggplot(plot_df_c, aes(x=Condition, y=`Slope X`, ymin=slp.low, ymax=slp.high))+
+  geom_pointrange()+
+  geom_hline(yintercept = 0, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
 
-plot2_3 <- makePlot(data   = plot_df[[3]], 
-                    xint   = 95, 
-                    title  = "β = 10", 
-                    x      = plot_df[[3]]$CI_slp_cov, 
-                    xlow   = plot_df[[3]]$CIcov.slp.low, 
-                    xhigh  = plot_df[[3]]$CIcov.slp.high,
-                    y      = plot_df[[3]]$Condition,
-                    xlimits= c(50,105))
+grid.arrange(p11, p12, p13, ncol=3, nrow=1, top="Bias")
 
+p21 <- ggplot(plot_df_a, aes(x=Condition, y=CI_slp_cov, ymin=CIcov.slp.low, ymax=CIcov.slp.high))+
+  geom_pointrange()+
+  geom_hline(yintercept = 95, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
 
-grid.arrange(plot2_1, plot2_2, plot2_3, ncol=3, nrow=1, top="Coverage of 95% Confidence Intervals")
+p22 <- ggplot(plot_df_b, aes(x=Condition, y=CI_slp_cov, ymin=CIcov.slp.low, ymax=CIcov.slp.high))+
+  geom_pointrange()+
+  geom_hline(yintercept = 95, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
 
-## Empirical standard error plot group
-plot3_1 <- makePlot(data   = plot_df[[1]], 
-                    xint   = 0, 
-                    title  = "β = 0", 
-                    x      = plot_df[[1]]$Empirical.SE, 
-                    xlow   = plot_df[[1]]$SE.slp.low, 
-                    xhigh  = plot_df[[1]]$SE.slp.high,
-                    y      = plot_df[[1]]$Condition,
-                    xlimits= c(0,1))
+p23 <- ggplot(plot_df_c, aes(x=Condition, y=CI_slp_cov, ymin=CIcov.slp.low, ymax=CIcov.slp.high))+
+  geom_pointrange()+
+  geom_hline(yintercept = 95, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
 
-plot3_2 <- makePlot(data   = plot_df[[2]], 
-                    xint   = 0, 
-                    title  = "β = 3.33", 
-                    x      = plot_df[[2]]$Empirical.SE, 
-                    xlow   = plot_df[[2]]$SE.slp.low, 
-                    xhigh  = plot_df[[2]]$SE.slp.high,
-                    y      = plot_df[[2]]$Condition,
-                    xlimits= c(0,1))
-
-plot3_3 <- makePlot(data   = plot_df[[3]], 
-                    xint   = 0, 
-                    title  = "β = 10", 
-                    x      = plot_df[[3]]$Empirical.SE, 
-                    xlow   = plot_df[[3]]$SE.slp.low, 
-                    xhigh  = plot_df[[3]]$SE.slp.high,
-                    y      = plot_df[[3]]$Condition,
-                    xlimits= c(0,2))
+grid.arrange(p21, p22, p23, ncol=3, nrow=1, top="Confidence interval Coverage")
 
 
-grid.arrange(plot3_1, plot3_2, plot3_3, ncol=3, nrow=1, top="Empirical Standard Error")
+
+p31 <- ggplot(plot_df_a, aes(x=Condition, y=ESE, ymin=SE.slp.low, ymax=SE.slp.high))+
+  geom_pointrange()+
+  #geom_hline(yintercept = 0, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
+
+p32 <- ggplot(plot_df_b, aes(x=Condition, y=ESE, ymin=SE.slp.low, ymax=SE.slp.high))+
+  geom_pointrange()+
+  #geom_hline(yintercept = 0, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
+
+p33 <- ggplot(plot_df_c, aes(x=Condition, y=ESE, ymin=SE.slp.low, ymax=SE.slp.high))+
+  geom_pointrange()+
+  #geom_hline(yintercept = 0, linetype=2)+
+  coord_flip()+
+  xlab('Variable')
+
+grid.arrange(p31, p32, p33, ncol=3, nrow=1, top="Empirical SE")
 
 
+# makePlot <- function(data, xint, title, x, xlow, xhigh, y, xlimits)
+# {
+#   plt <- ggplot(data, aes(col=color,group=method, xmin=xlow, x=x, xmax=xhigh))+
+#     geom_pointrange(aes(y = y))+
+#     #geom_linerange(aes(x=Intercept, ymin=Condition, ymax=Condition, xmin=conf.intercept.low, xmax=conf.intercept.high)) +
+#     labs(title=title)+
+#     #  coord_flip()+
+#     theme(plot.title = element_text(hjust = 0.5),
+#           strip.text.y.left = element_text(angle = 0),
+#           panel.spacing.y=unit(.5,"lines"),
+#           # Remove background
+#           panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+#           #panel.background = element_blank(), axis.line = element_line(colour = "black"),
+#           #Remove y ticks and labels
+#           axis.title.y=element_blank(),
+#           axis.text.y=element_blank(),
+#           axis.ticks.y=element_blank(),
+#           #Place labels outside
+#           strip.placement = "outside",
+#           strip.background =element_rect(fill="white"),
+#           #Place legend at the top
+#           legend.position="top"
+#     )+
+#     scale_color_manual(values=c("black","red","green","blue")) +
+#     scale_x_continuous(limits=xlimits)+
+#     facet_grid(rows=vars(method,k),
+#                scales="free",
+#                space="free_y",
+#                drop=TRUE,
+#                switch="y",
+#                labeller = function (labels) {
+#                  labels <- lapply(labels, as.character)
+#                  list(do.call(paste, c(labels, list(sep = "\n"))))
+#                })+ 
+#     geom_vline(xintercept = xint)
+#   plt
+# }
 
 
 
@@ -242,7 +253,6 @@ grid.arrange(plot3_1, plot3_2, plot3_3, ncol=3, nrow=1, top="Empirical Standard 
 
 
 ## TO - DO
-## Take another look at PDMI, something seems weird           (nope)
 ## Find out how exactly MCCIs work                            (https://onlinelibrary.wiley.com/doi/full/10.1002/sim.8086 ?)
 ## Empirical Standard Errors                                  (https://cran.r-project.org/web/packages/rsimsum/vignettes/A-introduction.html)
 ## cbind all data frames, plot stuff                          (done)
